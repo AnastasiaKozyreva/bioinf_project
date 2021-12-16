@@ -318,25 +318,16 @@ merged_data$smoking_experience <-  ifelse(merged_data$smoking == 1, (merged_data
                                           (merged_data$smoking_giveup_age - merged_data$smoking_start_age))
 
 
-merged_data$smoking_more_30 <- ifelse(merged_data$smoking_experience >= 30, 1, 0)
-
-```
-
-
-```{r}
-cor.test(merged_data$age, merged_data$smoking_experience)
-
-chisq.test(merged_data$age, merged_data$smoking_more_30)
-```
-
-
-# Строим момодели на основании логистической регрессии
-
-```{r}
-# sapply(merged_data, function(x) sum(is.na(x)))
 
 
 ```
+
+
+
+
+# Строим модели на основании логистической регрессии
+## Создаем датасет, в котором оставляем зависимые переменные и предикторы, удаляем при этом NA.
+
 ```{r}
 df_for_model <- merged_data |> 
   select(c(age, smoking, ever_smokers, under_18, spouse_or_partner, income_level,  IgG_hpylori, IgG_hpylori_10EIU, IgG_hpylori_30EIU)) |> 
@@ -372,10 +363,10 @@ summary(fit10_1)
 
 
 ```
-
+# предсказываем вероятность наличия инфекции (порог 10, 1 модель)
 
 ```{r}
-# предсказываем вероятность наличия инфекции (порог 10, 1 модель)
+
 df_for_model$HP_10_prob_1 <- predict(object = fit10_1, type = "response")
 
 pred_fit10_1 <- prediction(df_for_model$HP_10_prob_1, df_for_model$IgG_hpylori_10EIU)
@@ -405,7 +396,7 @@ legend(x = 0.75, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.61"), lty = 1
 df_for_model$HP_10_resp_1 <- ifelse(df_for_model$HP_10_prob_1 > 0.61, 1,0)
 df_for_model$HP_10_resp_correct_1 <- ifelse(df_for_model$HP_10_resp_1 == df_for_model$IgG_hpylori_10EIU, 1, 0)
 
-ggplot(df_for_model, aes(HP_10_prob, fill = as.factor(HP_10_resp_correct)))+
+ggplot(df_for_model, aes(HP_10_prob_1, fill = as.factor(HP_10_resp_correct_1)))+
   geom_dotplot()
 
 
@@ -437,9 +428,9 @@ summary(fit10_2)
 
 
 ```
-
-```{r}
 # предсказываем вероятность наличия инфекции (порог 10, 2 модель)
+```{r}
+
 df_for_model$HP_10_prob_2 <- predict(object = fit10_2, type = "response")
 
 pred_fit10_2 <- prediction(df_for_model$HP_10_prob_2, df_for_model$IgG_hpylori_10EIU)
@@ -469,7 +460,7 @@ legend(x = 0.75, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.615"), lty = 
 df_for_model$HP_10_resp_2 <- ifelse(df_for_model$HP_10_prob_2 > 0.615, 1,0)
 df_for_model$HP_10_resp_correct_2 <- ifelse(df_for_model$HP_10_resp_2 == df_for_model$IgG_hpylori_10EIU, 1, 0)
 
-ggplot(df_for_model, aes(HP_10_prob, fill = as.factor(HP_10_resp_correct_2)))+
+ggplot(df_for_model, aes(HP_10_prob_2, fill = as.factor(HP_10_resp_correct_2)))+
   geom_dotplot()
 
 
@@ -507,9 +498,10 @@ summary(fit30_1)
 
 
 ```
+# предсказываем вероятность наличия инфекции (порог 30, 1 модель)
 
 ```{r}
-# предсказываем вероятность наличия инфекции (порог 30, 1 модель)
+
 df_for_model$HP_30_prob_1 <- predict(object = fit30_1, type = "response")
 
 pred_fit30_1 <- prediction(df_for_model$HP_30_prob_1, df_for_model$IgG_hpylori_30EIU)
@@ -519,12 +511,15 @@ auc30_1 <- performance(pred_fit30_1, "auc") # 0.628
 
 str(auc30_1)
 
-plot(perf_fit30_1, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
 
+png("ROC_30_1.png")
+plot(perf_fit30_1, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
+dev.off()
 
 perf_fit30_1_spec <- performance(pred_fit30_1, x.measure = "cutoff", measure = "spec")
 perf_fit30_1_sens <- performance(pred_fit30_1, x.measure = "cutoff", measure = "sens")
 perf_fit30_1_acc <- performance(pred_fit30_1, x.measure = "cutoff", measure = "acc")
+
 
 
 
@@ -534,7 +529,7 @@ plot(add = T, perf_fit30_1_acc, col = "blue", lwd = 2)
 abline(v = 0.46, lwd = 2)
 legend(x = 0.6, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.46"), lty = 1, col = c('red', 'green', 'blue', 'black'), cex = 1, lwd = 2)
 
-
+ 
 
 df_for_model$HP_30_resp_1 <- ifelse(df_for_model$HP_30_prob_1 > 0.46, 1,0)
 df_for_model$HP_30_resp_correct_1 <- ifelse(df_for_model$HP_30_resp_1 == df_for_model$IgG_hpylori_30EIU, 1, 0)
@@ -544,8 +539,8 @@ ggplot(df_for_model, aes(HP_30_prob_1, fill = as.factor(HP_30_resp_correct_1)))+
 
 table(df_for_model$HP_30_resp_correct_1)
 
-sensitivity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_30_resp_1)) # чувствительность
-specificity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_30_resp_1)) # специфичность
+sensitivity(data = df_for_model, as.factor(IgG_hpylori_30EIU), as.factor(HP_30_resp_1)) # чувствительность
+specificity(data = df_for_model, as.factor(IgG_hpylori_30EIU), as.factor(HP_30_resp_1)) # специфичность
 ```
 
 
@@ -566,8 +561,10 @@ summary(fit30_2)
 
 ```
 
-```{r}
 # предсказываем вероятность наличия инфекции (порог 30, 2 модель)
+
+```{r}
+
 df_for_model$HP_30_prob_2 <- predict(object = fit30_2, type = "response")
 
 pred_fit30_2 <- prediction(df_for_model$HP_30_prob_2, df_for_model$IgG_hpylori_30EIU)
@@ -617,8 +614,7 @@ anova(fit30_2, test = "Chisq")
 
 
 
-```
-```{r}
+
 capture.output(anova(fit10_1, test = "Chisq"),
                anova(fit10_2, test = "Chisq"),
                anova(fit30_1, test = "Chisq"),
@@ -657,40 +653,40 @@ webshot("models.html", "models.png")
 
 
 
-Строим более глубокие модели со взаимодействиями (возраст и наличие супруга, возраст и наличие детей).
+# Строим более глубокие модели со взаимодействиями (возраст и наличие супруга, возраст и наличие детей).
 
 
-для порога 10:
+## для порога 10:
 
-fit10_int_1, fit10_int_2, fit10_int_3 - модели, которые учитывают сожителей
+fit10_int_1, fit10_int_2, fit10_int_3 - модели, которые учитывают сожителей (дети или супруги)
 
 ```{r}
-fit10_int_1 <- glm(IgG_hpylori_10EIU ~ age *spouse_or_partner, data = df_for_model, family = "binomial")
-summary(fit10_int_1)
+fit30_int_1 <- glm(IgG_hpylori_30EIU ~ age *spouse_or_partner, data = df_for_model, family = "binomial")
+summary(fit30_int_1)
 
 
 ```
 
 
 ```{r}
-fit10_int_2 <- glm(IgG_hpylori_10EIU ~ age*under_18 , data = df_for_model, family = "binomial")
-summary(fit10_int_2)
+fit30_int_2 <- glm(IgG_hpylori_30EIU ~ age*under_18 , data = df_for_model, family = "binomial")
+summary(fit30_int_2)
 
 
 ```
 
 ```{r}
-fit10_int_3 <- glm(IgG_hpylori_10EIU ~ age*under_18*spouse_or_partner , data = df_for_model, family = "binomial")
-summary(fit10_int_3)
+fit30_int_3 <- glm(IgG_hpylori_30EIU ~ age*under_18*spouse_or_partner , data = df_for_model, family = "binomial")
+summary(fit30_int_3)
 
 
 
 
 ```
 
-
+## Сводная таблица для моделей, учитывающих взаимодействия
 ```{r}
-tab_model(fit10_int_1, fit10_int_2, fit10_int_3,
+tab_model(fit30_int_1, fit30_int_2, fit30_int_3,
           show.r2 = F,
           auto.label = FALSE,
           pred.labels = c("intercept", 
@@ -710,8 +706,7 @@ webshot("models_interaction.html", "models_interaction.png")
 
 ```
 
-Если добавить в эти три модели курение (без взаимодействия):
-доля объясняемой ими дисперсии увеличивается, но не сильно. Все еще меньше,  чем в изначальной модели.
+# Если добавить в эти три модели курение (без взаимодействия):
 
 ```{r}
 fit10_int_4 <- glm(IgG_hpylori_10EIU ~ age *spouse_or_partner + smoking, data = merged_data, family = "binomial")
@@ -723,7 +718,7 @@ summary(fit10_int_4)
 
 ```{r}
 fit10_int_5 <- glm(IgG_hpylori_10EIU ~ age*under_18  + smoking, data = merged_data, family = "binomial")
-summary(fit10_int_2)
+summary(fit10_int_)
 
 
 ```
