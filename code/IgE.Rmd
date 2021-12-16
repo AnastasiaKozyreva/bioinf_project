@@ -82,35 +82,35 @@ fit0 <- glm(log_IgE ~ age + male + dogs + cats + rodents + birds + other_pets, d
 summary(fit0)
 plot_summs(fit0, scale = TRUE)
 ```
-
+Кажется, уровень IgE зависит от пола и наличия грызунов.
 ```{r}
 # DOGS
-ggplot(data, aes(x = chronical_diseases, fill = dogs)) +
-    geom_bar(position = "fill")
+#ggplot(data, aes(x = chronical_diseases, fill = dogs)) +
+#    geom_bar(position = "fill")
 
-ggplot(data, aes(x = age_grouped_who, fill = dogs)) +
-    geom_bar(position = "fill")
+#ggplot(data, aes(x = age_grouped_who, fill = dogs)) +
+#    geom_bar(position = "fill")
 
-ggplot(data, aes(x = health_level, fill = dogs)) +
-    geom_bar()
-ggplot(data, aes(x = education_level, fill = dogs)) +
-    geom_bar(position = "fill")
-ggplot(data, aes(x = smoking, fill = dogs)) +
-    geom_bar(position = "fill")
-ggplot(data, aes(x = smoked_previously, fill = dogs)) +
-    geom_bar(position = "fill")
-ggplot(data, aes(x = dogs, y = cigarettes_per_day)) +
-    geom_boxplot()
-ggplot(data, aes(x = dogs, y = Atherogenic_index)) +
-    geom_boxplot()
-ggplot(data, aes(x = dogs, y = Cholesterin)) +
-    geom_boxplot()
-ggplot(data, aes(x = dogs, y = VitaminD)) +
-    geom_boxplot()
+#ggplot(data, aes(x = health_level, fill = dogs)) +
+#    geom_bar()
+#ggplot(data, aes(x = education_level, fill = dogs)) +
+#    geom_bar(position = "fill")
+#ggplot(data, aes(x = smoking, fill = dogs)) +
+#    geom_bar(position = "fill")
+#ggplot(data, aes(x = smoked_previously, fill = dogs)) +
+#    geom_bar(position = "fill")
+#ggplot(data, aes(x = dogs, y = cigarettes_per_day)) +
+#    geom_boxplot()
+#ggplot(data, aes(x = dogs, y = Atherogenic_index)) +
+#    geom_boxplot()
+#ggplot(data, aes(x = dogs, y = Cholesterin)) +
+#    geom_boxplot()
+#ggplot(data, aes(x = dogs, y = VitaminD)) +
+#    geom_boxplot()
 
-fit1 <- glm(data = data, dogs ~ age_grouped_who+male+smoking+chronical_diseases, family = "binomial")
-summary(fit1)
-plot_summs(fit1, scale = TRUE)
+#fit1 <- glm(data = data, dogs ~ age_grouped_who+male+smoking+chronical_diseases, family = "binomial")
+#summary(fit1)
+#plot_summs(fit1, scale = TRUE)
 ```
 
 
