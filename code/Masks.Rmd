@@ -329,7 +329,7 @@ ggplot(logit_subset, aes(x = age))+
   geom_bar(col = "black", fill = "green")
 
 ```
-# ML
+# ML KNN
 
 ## Data
 ```{r}
@@ -652,9 +652,6 @@ subset_3 <- na.omit(subset_3)
 logit_subset_3 <- subset_3[, -c(10:15, 18:24, 26)]
 logit_subset_3 <- logit_subset_3[logit_subset_3$street_used_mask != 0]
 logit_subset_3$street_used_mask[logit_subset_3[, 7] == 2] <- 0
-logit_subset_3 %>%
-  mutate(across(.cols = !age, .fns = as.factor)) -> logit_subset_3
-logit_subset_3$street_used_mask <- droplevels(logit_subset_3$street_used_mask)
 
 
 #Model
@@ -680,6 +677,7 @@ set.seed(666)
 ML_data <- logit_subset_3
 ML_data %>%
   mutate(across(.cols = !c(age, times_sick, self_medical_checkups), .fns = as.factor)) -> ML_data
+ML_data$street_used_mask <- droplevels(ML_data$street_used_mask)
 
 levels(ML_data$male) <- c("No", "Yes")
 levels(ML_data$travelled) <- c("No", "Yes")
@@ -693,6 +691,12 @@ levels(ML_data$over_65) <-  c("No", "Yes")
 levels(ML_data$spouse_or_partner) <-  c("No", "Yes")
 levels(ML_data$old_partner) <-  c("No", "Yes", "Maybe")
 ML_data <- ML_data[ML_data$age < 88]
+
+#For CHAID
+ML_data$age_group <- cut(ML_data$age, breaks = c(17, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 95), labels = c("18-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51-55", "56-60", "61-65", "66-70", "71+"), ordered = T)
+ML_data <- ML_data[, -3]
+
+
 
 splitted_data <- initial_split(ML_data, prop = 0.8, strata = "street_used_mask")
 train_data <- splitted_data %>% training()
@@ -732,9 +736,8 @@ model_rpart <- caret::train(street_used_mask ~., data = train_data,
                             tuneLength = 30,
                             trControl = fitControl1)
 
-# prediction on Test data set
+
 pred_rpart <- predict(model_rpart, train_data)
-# Confusion Matrix 
 cm_rpart <- caret::confusionMatrix(pred_rpart, train_data$street_used_mask, positive = "Yes")
 cm_rpart
 
@@ -767,9 +770,9 @@ model_forest_2 <- caret::train(street_used_mask ~., data = train_data,
                                                    splitrule = "gini",
                                                    min.node.size = 200),
                              trControl = trainControl(method = "repeatedcv", number = 5,
-                                                      classProbs = T, summaryFunction = twoClassSummary))
+                                                      classProbs = T, summaryFunction = twoClassSummary),
+                          preProcess = c("center","scale","pca"))
 
-# prediction on Test data set
 pred_rf <- predict(model_forest_2, train_data)
 cm_rf <- confusionMatrix(pred_rf, train_data$street_used_mask, positive = "Yes")
 cm_rf
@@ -805,14 +808,10 @@ model_xgb <- caret::train(street_used_mask ~., data = train_data,
                                                    classProbs = T, summaryFunction = twoClassSummary),
                           preProcess = c("center","scale","pca"))
 
-# prediction on Test data set
 pred_xgb <- predict(model_xgb, test_data)
-# Confusion Matrix 
 cm_xgb <- confusionMatrix(pred_xgb, test_data$street_used_mask, positive="Yes")
 
-# Prediction Probabilities
 pred_prob_xgb <- predict(model_xgb, test_data, type="prob")
-# ROC value
 roc_xgb <- roc(test_data$street_used_mask, pred_prob_xgb$Yes)
 
 ```
@@ -863,6 +862,63 @@ plot(ROCR::performance(ROCR::prediction(predicted$est_val, predicted$true_val), 
 
 ```
 
+#Adjusted CHAID
 
+##Data
+```{r}
+set.seed(666)
+CHAID_data <- logit_subset_3
+CHAID_data$age_group <- cut(CHAID_data$age, breaks = c(17, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 95), labels = c("18-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51-55", "56-60", "61-65", "66-70", "71+"), ordered = T)
+CHAID_data <- CHAID_data[, -3]
+CHAID_data %>%
+  mutate(across(.cols = everything(), .fns = as.factor)) -> CHAID_data
+CHAID_data$street_used_mask <- droplevels(CHAID_data$street_used_mask)
+
+levels(CHAID_data$male) <- c("No", "Yes")
+levels(CHAID_data$travelled) <- c("No", "Yes")
+levels(CHAID_data$used_transport) <- c("No", "Yes")
+levels(CHAID_data$selftested_covid) <- c("Not tested", "Neg", "Pos")
+levels(CHAID_data$street_used_mask) <- c("No", "Yes")
+levels(CHAID_data$nosymptoms_past) <- c("No", "Yes")
+levels(CHAID_data$no_checkups) <- c("No", "Yes")
+levels(CHAID_data$under_18) <- c("No", "Yes")
+levels(CHAID_data$over_65) <-  c("No", "Yes")
+levels(CHAID_data$spouse_or_partner) <-  c("No", "Yes")
+levels(CHAID_data$old_partner) <-  c("No", "Yes", "Maybe")
+levels(CHAID_data$times_sick) <- c("Never", "Once", "Twice", "Thrice")
+levels(CHAID_data$self_medical_checkups) <- c("No", "Yes")
+levels(CHAID_data$other_people) <- c("No", "Yes")
+
+
+
+splitted_data <- initial_split(CHAID_data, prop = 0.8, strata = "street_used_mask")
+train_data_chaid <- splitted_data %>% training()
+test_data_chaid <-  splitted_data %>% testing()
+
+
+```
+
+#CHAID
+```{}
+chaid_res_3 <- chaid(street_used_mask ~ ., data = CHAID_data, control = chaid_control(minbucket = 150, minprob = 0.2))
+
+plot(chaid_res_3, gp = gpar(fontsize = 8))
+
+
+```
+
+#ML CHAID
+```{r}
+model_chaid <- caret::train(x = train_data_chaid[, c(1:5, 7:18)], y = train_data_chaid$street_used_mask,
+                          method = "chaid",
+                          metric = "ROC",
+                          trControl = trainControl(method = "boot", number = 100,
+                                                   classProbs = T, summaryFunction = twoClassSummary))
+
+pred_chaid <- predict(model_chaid, train_data_chaid)
+cm_rpart <- caret::confusionMatrix(pred_chaid, train_data_chaid$street_used_mask, positive = "Yes")
+cm_rpart
+
+```
 
 
