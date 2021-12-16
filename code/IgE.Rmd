@@ -20,6 +20,7 @@ library(GGally)
 library(sjPlot)
 library(ggpubr)
 library(webshot)
+library(jtools)
 
 setwd("~/Desktop/BIOINF2021/FINAL_PROJECT/spb_covid_study20-master/FINAL_PROJECT")
 load("~/Desktop/BIOINF2021/FINAL_PROJECT/spb_covid_study20-master/FINAL_PROJECT/data/wave2/phone_survey/phone_survey_data.rdata")
@@ -38,7 +39,9 @@ factor_list <- c("male", "travelled", "used_transport", "smoking", "health_level
 data <- merged_data %>% 
   # mutate(log_IgE = log10(IgE_general_quantitative)) %>% 
   mutate(across(c("male", "travelled", "used_transport", "smoking", "health_level", "lives_alone", "education_level", "age_grouped", "age_grouped_who", "no_pets", "dogs", "cats", "rodents", "birds", "other_pets", "not_sure_pets", "allergies", "chronical_diseases"), function(x) x %>% as.factor())) %>% 
-  mutate( log_IgE = log(IgE_general_quantitative))
+  mutate( log_IgE = log1p(IgE_general_quantitative))
+
+Hmisc::describe(data)
 
 ggplot(data, aes(x = no_pets, y = log_IgE)) +
   geom_boxplot(notch = TRUE)
@@ -55,8 +58,6 @@ ggplot(data, aes(x = other_pets, y = log_IgE)) +
 # любопытно, что IgE, кажется, связан с полом (выше у мужчин)
 ggplot(data, aes(x = male, y = log_IgE)) +
   geom_boxplot(notch = TRUE)
-ggplot(data, aes(x = age_grouped, y = log_IgE)) +
-  geom_boxplot(notch = TRUE)
 ggplot(data, aes(x = age_grouped_who, y = log_IgE)) +
   geom_boxplot(notch = TRUE)
 # education_level
@@ -72,29 +73,14 @@ ggplot(data, aes(x = district, y = log_IgE)) +
 ggplot(data, aes(x = health_level, y = log_IgE)) +
   geom_boxplot(notch = TRUE)
 
-ggplot(data, aes(x = health_level, y = log_IgE)) +
-  geom_boxplot(notch = TRUE)
-
-factor_list <- c("male", "travelled", "used_transport", "smoking", "health_level", "lives_alone", "education_level", "age_grouped", "age_grouped_who", "no_pets", "dogs", "cats", "rodents", "birds", "other_pets", "not_sure_pets")
-
-data %>% 
-  mutate (across(factor_list), function(x) x %>% as.factor())
-
-for (factor in factor_list) {
-  p <- ggplot(data, aes(x = factor, y = log_IgE)) +
-  geom_boxplot(notch = TRUE)
-  print(p)
-}
 ```
 
 
 ```{r}
-summary(data)
-ggplot(data, aes(y = log_IgE)) + 
-  geom_boxplot()
 
-fit0 <- glm(IgE_general_quantitative ~ no_pets + dogs + male + cats + rodents + birds + other_pets, data = data)
+fit0 <- glm(log_IgE ~ age + male + dogs + cats + rodents + birds + other_pets, data = data)
 summary(fit0)
+plot_summs(fit0, scale = TRUE)
 ```
 
 ```{r}
@@ -102,7 +88,7 @@ summary(fit0)
 ggplot(data, aes(x = chronical_diseases, fill = dogs)) +
     geom_bar(position = "fill")
 
-ggplot(data, aes(x = age_grouped, fill = dogs)) +
+ggplot(data, aes(x = age_grouped_who, fill = dogs)) +
     geom_bar(position = "fill")
 
 ggplot(data, aes(x = health_level, fill = dogs)) +
@@ -121,12 +107,10 @@ ggplot(data, aes(x = dogs, y = Cholesterin)) +
     geom_boxplot()
 ggplot(data, aes(x = dogs, y = VitaminD)) +
     geom_boxplot()
-ggplot(data, aes(x = travelled, fill = dogs)) +
-    geom_bar(position = "fill")
-ggplot(data, aes(x = work_with_people, fill = dogs)) +
-    geom_bar(position = "fill")
-ggplot(data, aes(x = income_level, fill = dogs)) +
-    geom_bar(position = "fill")
+
+fit1 <- glm(data = data, dogs ~ age_grouped_who+male+smoking+chronical_diseases, family = "binomial")
+summary(fit1)
+plot_summs(fit1, scale = TRUE)
 ```
 
 
