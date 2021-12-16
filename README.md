@@ -29,3 +29,6 @@ code                   --  .Rmd files with code providing respective analysis
 pictures               --  graphical data providing visualisation for analysis
  
 ```
+## Roles
++ An assesment of `The association of Helicobacter Pylori infection with lifestyle` made by *Anastasia Kozyreva*.
++  
