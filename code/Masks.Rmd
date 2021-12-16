@@ -909,16 +909,17 @@ plot(chaid_res_3, gp = gpar(fontsize = 8))
 
 #ML CHAID
 ```{r}
-model_chaid <- caret::train(x = train_data_chaid[, c(1:5, 7:18)], y = train_data_chaid$street_used_mask,
+model_chaid_3 <- caret::train(x = CHAID_data[, c(1:5, 7:18)], y = CHAID_data$street_used_mask,
                           method = "chaid",
                           metric = "ROC",
-                          trControl = trainControl(method = "boot", number = 100,
+                          trControl = trainControl(method = "cv", number = 50,
                                                    classProbs = T, summaryFunction = twoClassSummary))
 
-pred_chaid <- predict(model_chaid, train_data_chaid)
-cm_rpart <- caret::confusionMatrix(pred_chaid, train_data_chaid$street_used_mask, positive = "Yes")
+pred_chaid <- predict(model_chaid_3, CHAID_data)
+cm_rpart <- caret::confusionMatrix(pred_chaid, CHAID_data$street_used_mask, positive = "Yes")
 cm_rpart
 
+plot(model_chaid_3$finalModel, gp = gpar(fontsize = 8))
 ```
 
 
