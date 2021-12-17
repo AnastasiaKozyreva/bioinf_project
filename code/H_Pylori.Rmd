@@ -629,10 +629,9 @@ capture.output(anova(fit10_1, test = "Chisq"),
 
 ```{r}
 
-tab_model(fit10_1, fit10_2, fit30_1, fit30_2, show.obs = T, show.r2 = F,
+tab_model(fit10_1, fit10_2, fit30_1, fit30_2, show.obs = T, show.r2 = T,
           auto.label = FALSE,
-          pred.labels = c("intercept", 
-                          "age",
+          pred.labels = c( "age",
                           "having children",
                           "smoking now",
                           "having spouse or partner",
@@ -643,7 +642,7 @@ tab_model(fit10_1, fit10_2, fit30_1, fit30_2, show.obs = T, show.r2 = F,
                           "income level: \n Can buy real estate and more",
                           "smoked ever, including now"),
           dv.labels = c("Model 1 (10 EIU)", "Model 2 (10 EIU)", "Model 1 (30 EIU)", "Model 2 (30 EIU)"),
-          file = "models.html")
+          file = "models.html", show.intercept = F)
 
 
 webshot("models.html", "models.png")
@@ -656,7 +655,7 @@ webshot("models.html", "models.png")
 # Строим более глубокие модели со взаимодействиями (возраст и наличие супруга, возраст и наличие детей).
 
 
-## для порога 10:
+## для порога 30:
 
 fit10_int_1, fit10_int_2, fit10_int_3 - модели, которые учитывают сожителей (дети или супруги)
 
@@ -687,10 +686,10 @@ summary(fit30_int_3)
 ## Сводная таблица для моделей, учитывающих взаимодействия
 ```{r}
 tab_model(fit30_int_1, fit30_int_2, fit30_int_3,
-          show.r2 = F,
+          show.r2 = T,
           auto.label = FALSE,
-          pred.labels = c("intercept", 
-                          "age",
+          show.intercept = F,
+          pred.labels = c("age",
                           "having spouse or partner",
                           "interaction (age:having spouse or partner)",
                           "having children",
