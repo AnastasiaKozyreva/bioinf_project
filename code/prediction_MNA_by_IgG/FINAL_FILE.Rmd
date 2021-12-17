@@ -1,0 +1,523 @@
+---
+title: "Decision_tree"
+author: "PAA"
+date: "15 12 2021"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(sjPlot)
+
+library(tidyverse) 
+library(mlbench) 
+library(Hmisc) 
+library(GGally)
+library(corrplot) 
+
+library(rpart.plot) 
+library(treeheatr)
+
+library(caret) 
+#library(mlr) 
+
+library(Metrics) 
+library(pROC) #ROC
+library(rocc)
+
+library(caTools) #AUC
+#library(summarytools) #not sure where and what for we use this
+library(gridExtra)
+library(randomForest)
+library(datasets)
+library(dlstats)
+library(pkgsearch) 
+library(cutoff)
+```
+
+```
+
+
+```{r}
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/other_test_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/phone_survey_data.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_B_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_C_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_D_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_nab.rda")
+
+```
+
+
+```{r}
+
+data_for_ab_IgG1 <-merge(test_B_results_matched_to_phone_survey_ids, test_C_results_matched_to_phone_survey_ids, by = "ID", all.x = T)
+
+data_for_ab_IgG2 <-merge(data_for_ab_IgG1, test_D_results_matched_to_phone_survey_ids, by = "ID", all.x = T)
+
+data_all<-merge(phone_survey_data, other_test_results_matched_to_phone_survey_ids, by = "ID", all.y = T)
+
+data_for_ab<- merge(data_for_ab_IgG2, data_all, by = "ID", all.x = T)
+
+data_for_nab<- data_for_ab %>% 
+  dplyr::select(c(IgG_testB_quantitative, IgA_or_G_or_M_testC_quantitative, IgG_or_M_testD_quantitative, male, age, neutralizing_antibodies_quantitative))
+
+data_for_nab<- data_for_nab %>% 
+rename_all(function(x)x %>% stringi::stri_replace_all_regex(c("IgG_testB_quantitative", "IgA_or_G_or_M_testC_quantitative", "IgG_or_M_testD_quantitative", "male", "age", "neutralizing_antibodies_quantitative"), c("abbott", "genetico", "vector", "gender", "age", "Nab"), vectorize_all = FALSE))
+
+data_for_nab<- data_for_nab %>% 
+mutate('MNT 1:80' = ifelse (Nab  < 80, "No SARS-Cov-2", "SARS-Cov-2"))
+
+dataset <- data_for_nab %>% 
+    dplyr::select(!c( Nab))
+
+dataset$`MNT 1:80` <- as.factor(dataset$`MNT 1:80`)
+dataset$gender <- as.factor(dataset$gender)
+
+
+```
+
+
+```{r}
+
+dataset_80 <- data_for_nab%>% 
+  dplyr::select(c(abbott, genetico, vector, 'MNT 1:80'))
+
+dataset_abbott<-data_for_nab %>% 
+  dplyr::select(c(abbott, gender, age , 'MNT 1:80'))
+
+dataset_genetico<-data_for_nab %>% 
+  dplyr::select(c(genetico, gender, age , 'MNT 1:80'))
+
+dataset_vector <- data_for_nab%>% 
+  dplyr::select(c( vector, gender, age ,  'MNT 1:80'))
+
+```
+
+#Рекурсивное разбиение и регрессионное дерево
+
+```{r}
+model <- rpart(`MNT 1:80` ~., data = dataset)
+par(xpd = NA) 
+plot(model)
+text(model, digits = 3)
+
+
+```
+
+# Посмотрим, сколько у нас ответчиков в РМН по порогу 1:80.
+
+```{r}
+response.column = 'MNT 1:80'
+response = dataset[[response.column]]
+table(response)
+
+
+```
+
+# Сделаем тестовую и тренировочную выборки
+
+```{r}
+
+set.seed(1271) #setting random number
+index <- sample(2, nrow(dataset_80), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_80 <- dataset_80[index==1, ] # Train data
+test_base_80 <- dataset_80[index == 2, ] # Test data
+#check the ratio of pos/neg cases in the train/test data:
+table(train_base_80$`MNT 1:80`)
+table(test_base_80$`MNT 1:80`)
+```
+
+
+# Сделаем модель Дерево решений
+
+```{r}
+Nab_model_80 <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_80, 
+                        method = "class")
+summary(Nab_model_80)
+
+rpart.plot(x = Nab_model_80, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+# Нарисуем тепловое дерево для сделанной модели
+
+```{r}
+
+x <- partykit::as.party(Nab_model_80)
+heat_tree(x = x)
+
+```
+
+# Посмотрим метрики
+
+```{r}
+
+class_predicted_80 <- predict(object = Nab_model_80,  
+                           newdata = test_base_80,   
+                           type = "class")
+confusionMatrix(data = class_predicted_80,       
+                reference = as.factor(test_base_80$`MNT 1:80`))
+heat_tree(
+  x = x,
+  data_test = test_base_80)
+```
+
+# Построим РОК-кривую для нашей модели
+
+```{r}
+pred_prob_80 <-as.data.frame( predict(Nab_model_80, test_base_80, type="prob"))
+# ROC value
+roc_80 <- roc(test_base_80$`MNT 1:80`, pred_prob_80$`SARS-Cov-2`)
+
+ggroc(roc_80)+
+  theme_classic2()
+
+```
+
+
+## Дальше сделаем индивидуально для каждого теста
+
+```{r}
+
+index <- sample(2, nrow(dataset_abbott), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_abbott <- dataset_abbott[index==1, ] 
+test_base_abbott <- dataset_abbott[index == 2, ] 
+
+table(train_base_abbott$`MNT 1:80`)
+table(test_base_abbott$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_abbott <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_abbott, 
+                        method = "class")
+summary(Nab_model_abbott)
+
+rpart.plot(x = Nab_model_abbott, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+abbott <- partykit::as.party(Nab_model_abbott)
+heat_tree(x = abbott)
+
+```
+
+```{r}
+
+class_predicted_abbott <- predict(object = Nab_model_abbott,  
+                           newdata = test_base_abbott,   
+                           type = "class")
+confusionMatrix(data = class_predicted_abbott,       
+                reference = as.factor(test_base_abbott$`MNT 1:80`))
+heat_tree(
+  x = abbott,
+  data_test = test_base_abbott)
+```
+
+```{r}
+
+index <- sample(2, nrow(dataset_genetico), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_genetico <- dataset_genetico[index==1, ] 
+test_base_genetico <- dataset_genetico[index == 2, ] 
+
+table(train_base_genetico$`MNT 1:80`)
+table(test_base_genetico$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_genetico <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_genetico, 
+                        method = "class")
+summary(Nab_model_genetico)
+
+rpart.plot(x = Nab_model_genetico, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+genetico <- partykit::as.party(Nab_model_genetico)
+heat_tree(x = genetico)
+
+class_predicted_genetico <- predict(object = Nab_model_genetico,  
+                           newdata = test_base_genetico,   
+                           type = "class")
+confusionMatrix(data = class_predicted_genetico,       
+                reference = as.factor(test_base_genetico$`MNT 1:80`))
+heat_tree(
+  x = genetico,
+  data_test = test_base_genetico)
+```
+
+
+```{r}
+
+index <- sample(2, nrow(dataset_vector), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_vector <- dataset_vector[index==1, ] 
+test_base_vector <- dataset_vector[index == 2, ] 
+
+table(train_base_vector$`MNT 1:80`)
+table(test_base_vector$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_vector <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_vector, 
+                        method = "class")
+summary(Nab_model_vector)
+
+rpart.plot(x = Nab_model_vector, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+vector <- partykit::as.party(Nab_model_vector)
+heat_tree(x = vector)
+
+class_predicted_vector <- predict(object = Nab_model_vector,  
+                           newdata = test_base_vector,   
+                           type = "class")
+confusionMatrix(data = class_predicted_vector,       
+                reference = as.factor(test_base_vector$`MNT 1:80`))
+heat_tree(
+  x = vector,
+  data_test = test_base_vector)
+```
+
+
+#Сделаем РОК-кривые для трех тестов против РМН.
+
+```{r}
+
+roc.list <- roc(`MNT 1:80` ~ genetico + abbott + vector, dataset_80)
+ggroc(roc.list)+
+  theme_classic2()
+
+```
+
+_______________________________________________________________________________________________________________________
+#Визуально оценим корреляцию признаков
+```{r}
+
+ggplot(MDF, aes(y = IgG_testB_quantitative, x = neutralizing_antibodies_quantitative)) +
+  geom_point() + 
+  ylab("IgG общие к Covid-19 (test B)") + 
+  xlab("NAB") + 
+  scale_x_log10()+
+  theme_bw()
+
+ggplot(MDF, aes(y = IgA_or_G_or_M_testC_quantitative, x = neutralizing_antibodies_quantitative)) +
+  geom_point() + 
+  ylab("IgG + IgM + IgA к Covid-19 (test C)") + 
+  xlab("NAB") + 
+  scale_x_log10()+
+  theme_bw()
+
+ggplot(data = MDF, aes(y = IgG_or_M_testD_quantitative, x = neutralizing_antibodies_quantitative)) +
+  geom_jitter(size = 0.8) +
+  ylab("ELISA VECTORBEST") + 
+  xlab("Neutralizing antibodies")+
+  theme_bw() +
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")
+```
+
+#Проанализируем данные с помощью линейной регрессии
+```{r}
+lm_vector = lm(Nab~vector, data)
+
+summary(lm_vectorD)
+
+lm_abbott =lm(Nab~abbott, data)
+
+summary(lm_abbott)
+
+lm_genetico = lm(Nab~genetico, MDF)
+
+summary(lm_genetico)
+```
+#Создадим модель с помощью randomForest на основе 3 тест систем
+```{r}
+
+datasetrf<-test_nab
+
+set.seed(100)
+
+ind <- sample(2, nrow(datasetrf), replace = TRUE, prob = c(0.8, 0.2))
+
+train <- datasetrf[ind==1,]
+test <- datasetrf[ind==2,]
+
+rf <- randomForest(`MNT 1:80` ~ vector+abbott+genetico, data=train, proximity=TRUE)
+
+print(rf)
+
+p1 <- predict(rf, train)
+
+confusionMatrix(p1, train$ `MNT 1:80`)
+
+p2 <- predict(rf, test)
+
+confusionMatrix(p2, test$`MNT 1:80`)
+
+plot(rf)
+
+hist(treesize(rf),
+     main = "No. of Nodes for the Trees",
+     col = "green")
+varImpPlot(rf,
+           sort = T,
+           n.var = 10,
+           main = "Top 10 - Variable Importance")
+  importance(rf)
+
+pred_prob_rf <-as.data.frame( predict(rf, test, type="prob"))
+
+roc_rf <- pROC::roc(test$`MNT 1:80`, pred_prob_rf$`SARS-Cov-2`)
+
+roc_rf
+
+caTools::colAUC(pred_prob_rf$`SARS-Cov-2`, test$`MNT 1:80`, plotROC = T)
+
+```
+#Проделаем тоже самое с каждой тест-системой отдельно
+```{r}
+set.seed(100)
+
+ind <- sample(2, nrow(datasetrf), replace = TRUE, prob = c(0.8, 0.2))
+
+train <- datasetrf[ind==1,]
+test <- datasetrf[ind==2,]
+
+rf_vector <- randomForest(`MNT 1:80`~ vector, data=train, proximity=TRUE)
+
+print(rf_vector)
+
+p1_vector <- predict(rf_vector, train)
+
+confusionMatrix(p1_vector, train$ `MNT 1:80`)
+
+p2_vector <- predict(rf_vector, test)
+
+confusionMatrix(p2_vector, test$`MNT 1:80`)
+
+plot(rf_vector)
+
+pred_prob_rf_vector <-as.data.frame( predict(rf_vector, test, type="prob"))
+
+roc_rf_vector <- pROC::roc(test$`MNT 1:80`, pred_prob_rf_vector$`SARS-Cov-2`)
+
+roc_rf_vector
+```
+
+```{r}
+set.seed(100)
+
+ind <- sample(2, nrow(datasetrf), replace = TRUE, prob = c(0.8, 0.2))
+
+train <- datasetrf[ind==1,]
+test <- datasetrf[ind==2,]
+
+rf_abbott <- randomForest(`MNT 1:80`~ abbott, data=train, proximity=TRUE)
+
+print(rf_abbott)
+
+p1_abbott <- predict(rf_abbott, train)
+
+confusionMatrix(p1_abbott, train$ `MNT 1:80`)
+
+p2_abbott <- predict(rf_abbott, test)
+
+confusionMatrix(p2_abbott, test$`MNT 1:80`)
+
+plot(rf_abbott)
+
+pred_prob_rf_abbott <-as.data.frame( predict(rf_abbott, test, type="prob"))
+
+# ROC value
+roc_rf_abbott <- pROC::roc(test$`MNT 1:80`, pred_prob_rf_abbott$`SARS-Cov-2`)
+
+roc_rf_abbott
+```
+
+```{r}
+set.seed(100)
+
+ind <- sample(2, nrow(datasetrf), replace = TRUE, prob = c(0.8, 0.2))
+
+train <- datasetrf[ind==1,]
+test <- datasetrf[ind==2,]
+
+rf_genetico <- randomForest(`MNT 1:80`~ genetico, data=train, proximity=TRUE)
+
+print(rf_genetico)
+
+p1_genetico <- predict(rf_genetico, train)
+
+confusionMatrix(p1_genetico, train$ `MNT 1:80`)
+
+p2_genetico <- predict(rf_genetico, test)
+
+confusionMatrix(p2_genetico, test$`MNT 1:80`)
+
+plot(rf_genetico)
+
+pred_prob_rf_genetico <-as.data.frame( predict(rf_genetico, test, type="prob"))
+
+roc_rf_genetico <- pROC::roc(test$`MNT 1:80`, pred_prob_rf_genetico$`SARS-Cov-2`)
+
+roc_rf_genetico
+
+```
+#Построим ROC-кривую по каждой из моделей
+```{r}
+caTools::colAUC(pred_prob_rf_genetico$`SARS-Cov-2`, test$`MNT 1:80`, plotROC = T)
+
+caTools::colAUC(pred_prob_rf_abbott$`SARS-Cov-2`, test$`MNT 1:80`, plotROC = T)
+
+caTools::colAUC(pred_prob_rf_vector$`SARS-Cov-2`, test$`MNT 1:80`, plotROC = T)
+```
+
+#Сравним получившиеся результаты с визуализацией с помощью боксплотов
+```{r}
+ggplot(test_nab, aes(y = vector, x = `MNT 1:80` )) +
+  geom_boxplot() + 
+  ylab("IgG (VectorBest)") + 
+  xlab("NAB") + 
+  theme_bw()
+  
+ggplot(test_nab, aes(y = abbott, x = `MNT 1:80` )) +
+  geom_boxplot() + 
+  ylab("IgG (Abbott)") + 
+  xlab("NAB") + 
+  theme_bw()
+  
+ggplot(test_nab, aes(y = genetico, x = `MNT 1:80` )) +
+  geom_boxplot() + 
+  ylab("IgG (Genetico)") + 
+  xlab("NAB") + 
+  theme_bw()
+```
+
