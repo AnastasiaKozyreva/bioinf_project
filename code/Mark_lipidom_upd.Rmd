@@ -1,0 +1,851 @@
+---
+title: "Project"
+author: "MarkK"
+date: " 11 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(flextable)
+library(dplyr)
+library(ggplot2)
+library(nortest)
+library(FSA)
+library(ggcorrplot)
+library(broom)
+library(splines)
+library(GGally)
+library(sandwich)
+library(Hmisc)
+library(MatchIt)
+library(knitr)
+library(ggpubr)
+library(sjPlot)
+
+```
+
+
+#подготовка данных
+```{r}
+semi_join(other_test_results_matched_to_phone_survey_ids, phone_survey_data,by=c("ID"="ID")) 
+
+tests <- other_test_results_matched_to_phone_survey_ids %>% 
+ dplyr::select(ID, VitaminD, Cholesterin, Triglycerides, VLDL, LDL, HDL, Atherogenic_index) %>% 
+ na.omit() 
+  
+str(tests)
+str(phone_survey_data)
+
+phone_data <- phone_survey_data %>% 
+ dplyr::select(ID, male, age, used_transport, selftested_covid_positive, health_level, smoking, smoked_previously, cigarettes_per_day, times_sick, chronical_diseases, lives_alone, dogs, cats, income_level, work_status, study_status, education_level, anosmia_now, anosmia_past, times_sick, lives_alone,  num_people_home, under_18, over_65, spouse_or_partner) 
+
+str(phone_data)
+
+df <- merge(phone_data, tests, by="ID")  
+
+for ( i in c("male", "used_transport", "selftested_covid_positive", "smoking", "smoked_previously", "anosmia_past", "lives_alone", "dogs", "cats", "chronical_diseases", "work_status", "study_status", "anosmia_now", "income_level", "work_status", "study_status", "education_level", "lives_alone", "spouse_or_partner", "Atherosclerosis") ) {
+    df[[i]] <- as.factor(df[[i]])
+}
+
+Hmisc::describe(df)
+df %>%
+  dplyr::select(!ID) -> df
+
+str(df)
+
+```
+
+
+#введем деление на возрастные группы и приведем к категориальным переменным по референсам
+```{r}
+df$age_group <- cut(df$age,
+                    breaks = c(17, 45, 60, 75, 91))
+levels(df$age_group) <- c("18-44", "45-59", "60-74", "75-90", "90+") 
+summary(df$age_group)  # по классификации ВОЗ
+
+str(df)
+
+#липидограммы по группам
+
+df$Atherosclerosis <- cut(df$Atherogenic_index,
+                           breaks = c(0, 3.5, 10),
+                           labels = c("0", "1" ))	# по референсам
+summary(df$Atherosclerosis)     
+
+
+df$Cholesterin_groups <- cut(df$Cholesterin,
+                           breaks = c(0, 5.5, 10),
+                           labels = c("norm", "abnorm"))	# по референсам
+summary(df$Cholesterin_groups) 
+
+
+df$Triglycerides_groups <- cut(df$Triglycerides,
+                           breaks = c(0, 1.7, 10),
+                           labels = c("norm", "abnorm"))	# по референсам
+summary(df$Triglycerides_groups) 
+
+df$vitD_groups <- cut(df$VitaminD,
+                           breaks = c(0, 20, 30, 100, 500),
+                           labels = c("deficit", "sub", "norm", "overdose"))	
+summary(df$vitD_groups) 
+
+df$ever_smoker <- as.factor(ifelse(df$smoking == 1| df$smoked_previously == 1, 1, 0))
+
+
+str(df)
+view(df)
+
+
+
+
+
+```
+
+
+#как выглядят данные
+```{r}
+
+#графики возрастные группы
+
+ggplot(df, aes(x = age_group))+
+  geom_bar()+
+  theme_classic()
+
+ggplot(df, aes(x = Cholesterin)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = Triglycerides)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = HDL)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = LDL)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = VLDL)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = Atherogenic_index)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = VitaminD)) +
+    geom_histogram(bins = 30, color = "white")
+
+
+ggplot(df, aes(x = age)) +
+    geom_histogram(bins = 30, color = "white")
+
+ggplot(df, aes(x = age_group))+
+  geom_bar()+
+  theme_classic()
+
+```
+  
+#описательная таблица
+```{r}
+
+
+numeric_table<-list(
+  '__Максимум' = function(x) max(x, na.rm = TRUE),
+  '__Минимум' = function(x) min(x, na.rm = TRUE),
+  '__Среднее значение' = function(x) mean(x, na.rm = TRUE),
+  '__Медиана' = function(x) median(x, na.rm = TRUE),
+  '__Первый квартиль'= function(x) quantile(x, 0.25,  na.rm = TRUE, names = FALSE),
+  '__Третий квартиль'= function(x) quantile(x, 0.75,  na.rm = TRUE, names = FALSE),
+  '__Интерквартильный размах'= function(x) quantile(x, 0.75,  na.rm = TRUE, names = FALSE) - quantile(x, 0.25,  na.rm = TRUE, names = FALSE),
+  '__Количество значений' = function(x) length(x),
+  '__Количество пропущенных' = function(x) is.na(x) %>% sum()
+  )
+
+df %>%
+  summarise(across(c(age, VitaminD, Cholesterin, Triglycerides, VLDL, LDL, HDL, Atherogenic_index), numeric_table)) %>%
+  pivot_longer(everything()) %>%
+  separate(name, into=c("Переменная", "Параметр"), sep ="___") -> numeric_table
+
+
+
+
+
+```  
+  
+##статистика по курению (в данный момент)
+```{r}
+
+#Проверка нормальности?
+shapiro.test(df$Atherogenic_index)
+lillie.test(df$Atherogenic_index) #модифицированный Колмогоров-Смирнов
+
+#сравнение двух независимых выборок методом Манна-Уитни
+
+wilcox.test(df$Atherogenic_index ~ df$smoking, paired = FALSE)
+
+ggplot(df, aes(x = smoking, y = Atherogenic_index)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic()
+
+
+
+wilcox.test(df$VitaminD ~ df$smoking, paired = FALSE, conf.int = TRUE)
+
+ggplot(df, aes(x = smoking, y = VitaminD)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic()
+
+
+wilcox.test(df$Cholesterin ~ df$smoking, paired = FALSE, conf.int = TRUE)
+
+ggplot(df, aes(x = smoking, y = Cholesterin)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic()
+
+wilcox.test(df$Triglycerides ~ df$smoking, paired = FALSE, conf.int = TRUE)
+
+ggplot(df, aes(x = smoking, y = Triglycerides)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic()
+
+
+wilcox.test(df$HDL ~ df$smoking, paired = FALSE, conf.int = TRUE)
+
+ggplot(df, aes(x = smoking, y = HDL)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic()
+
+wilcox.test(df$VLDL ~ df$smoking, paired = FALSE, conf.int = TRUE)
+
+ggplot(df, aes(x = smoking, y = VLDL)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic() 
+
+
+#корреляционная матрица
+df %>%
+  dplyr::select(age, VitaminD, Cholesterin, Triglycerides, VLDL, LDL, HDL, Atherogenic_index, cigarettes_per_day) %>%
+  psych::corr.test() -> corr_data
+
+corrp.mat <- cor_pmat(corr_data$r)
+
+corr_data$r %>% 
+  ggcorrplot(hc.order = TRUE, lab = TRUE, type = "lower", p.mat = corrp.mat,
+   outline.col = "white",
+   ggtheme = ggplot2::theme_minimal(),
+   colors = c("#6D9EC1", "white", "#E46726"))
+
+
+```  
+
+##статистика среди курильщиков (когда-либо)
+```{r}
+
+
+wilcox.test(df$Atherogenic_index ~ df$ever_smoker, paired = FALSE)
+
+wilcox.test(df$VitaminD ~ df$ever_smoker, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df$Cholesterin ~ df$ever_smoker, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df$Triglycerides ~ df$ever_smoker, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df$HDL ~ df$ever_smoker, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df$VLDL ~ df$ever_smoker, paired = FALSE, conf.int = TRUE)
+
+
+
+str(df)
+```  
+
+##статистика по полу
+```{r}
+
+
+wilcox.test(df$Atherogenic_index ~ df$male, paired = FALSE)
+
+ggboxplot(df, x = "male", y = "Atherogenic_index",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 5)
+
+wilcox.test(df$VitaminD ~ df$male, paired = FALSE, conf.int = TRUE)
+
+ggboxplot(df, x = "male", y = "VitaminD",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 300)
+
+wilcox.test(df$Cholesterin ~ df$male, paired = FALSE, conf.int = TRUE)
+
+ggboxplot(df, x = "male", y = "Cholesterin",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 2)
+
+wilcox.test(df$Triglycerides ~ df$male, paired = FALSE, conf.int = TRUE)
+
+ggboxplot(df, x = "male", y = "Triglycerides",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 6)
+
+wilcox.test(df$HDL ~ df$male, paired = FALSE, conf.int = TRUE)
+
+ggboxplot(df, x = "male", y = "HDL",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 1)
+
+wilcox.test(df$VLDL ~ df$male, paired = FALSE, conf.int = TRUE)
+
+ggboxplot(df, x = "male", y = "VLDL",
+          fill = "male", palette = "Tableau")+ 
+  facet_grid(age_group ~ .) +
+  stat_compare_means(label.y = 1)
+
+
+str(df)
+```  
+
+
+##описательная статистика по возрастным группам
+```{r}
+
+#сравнение выборок методом Kruskall-Wallis и post-hoc анализом
+
+##холестерин по возрастным группам
+
+kruskal.test(Cholesterin ~ age_group, df)
+dunnTest(Cholesterin ~ age_group, data=df, method="holm") 
+
+
+my_comparisons <- list( c("18-44", "45-59"), c("45-59", "60-74"), c("60-74", "75-90"), c("18-44", "60-74"), c("18-44", "75-90"))
+ggboxplot(df, x = "age_group", y = "Cholesterin",
+          fill = "age_group", palette = "Tableau",
+          facet.by = "male")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+##вит. Д по возрастным группам
+kruskal.test(VitaminD ~ age_group, df)
+dunnTest(VitaminD ~ age_group, data=df, method="holm") 
+
+ggboxplot(df, x = "age_group", y = "VitaminD",
+          fill = "age_group", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+
+##ТГ по возрастным группам
+kruskal.test(Triglycerides ~ age_group, df)
+dunnTest(Triglycerides ~ age_group, data=df, method="holm") 
+
+  
+my_comparisons <- list( c("18-44", "45-59"), c("45-59", "60-74"), c("60-74", "75-90"), c("18-44", "60-74"), c("18-44", "75-90"))
+ggboxplot(df, x = "age_group", y = "Triglycerides",
+          color = "age_group", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+
+##ЛПВП по возрастным группам
+kruskal.test(HDL ~ age_group, df)
+dunnTest(HDL ~ age_group, data=df, method="holm") 
+
+ggboxplot(df, x = "age_group", y = "HDL",
+          fill = "age_group", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+##атеросклероз по возрастным группам
+kruskal.test(Atherogenic_index ~ age_group, df)
+dunnTest(Atherogenic_index ~ age_group, data=df, method="holm") 
+
+ggboxplot(df, x = "age_group", y = "Atherogenic_index",
+          fill = "age_group", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+  
+  
+
+str(df)
+```  
+
+
+
+##описательная статистика по одиночеству
+```{r}
+
+wilcox.test(df$VitaminD ~ df$lives_alone, paired = FALSE, conf.int = TRUE)
+
+str(df)
+
+ggplot(df, aes(x = lives_alone, y = VitaminD)) +
+  geom_boxplot(color="darkgreen",
+               fill ="green") +
+  stat_compare_means() +
+  theme_classic() 
+
+
+```  
+
+
+##статистика по партнеру (значимость только в группе молодых)
+```{r}
+
+
+wilcox.test(df$Atherogenic_index ~ df$spouse_or_partner, paired = FALSE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = Atherogenic_index, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$VitaminD ~ df$spouse_or_partner, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = VitaminD, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 200)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$Cholesterin ~ df$spouse_or_partner, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = Cholesterin, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 8)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$Triglycerides ~ df$spouse_or_partner, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = Triglycerides, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$HDL ~ df$spouse_or_partner, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = HDL, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 1)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$VLDL ~ df$spouse_or_partner, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(spouse_or_partner))) %>% 
+  ggplot(aes(y = VLDL, x = spouse_or_partner, fill = spouse_or_partner))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 1)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+
+str(df)
+```  
+
+
+##статистика по учебе
+```{r}
+
+
+wilcox.test(df$Atherogenic_index ~ df$study_status, paired = FALSE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = Atherogenic_index, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+
+wilcox.test(df$VitaminD ~ df$study_status, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = VitaminD, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+
+wilcox.test(df$Cholesterin ~ df$study_status, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = Cholesterin, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+wilcox.test(df$Triglycerides ~ df$study_status, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = Triglycerides, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+wilcox.test(df$HDL ~ df$study_status, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = HDL, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+wilcox.test(df$VLDL ~ df$study_status, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(study_status)) & (age <= 30)) %>% 
+  ggplot(aes(y = VLDL, x = study_status, fill = study_status))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  theme_classic()
+
+
+
+str(df)
+```  
+
+##статистика по собакенам
+```{r}
+
+
+wilcox.test(df$Atherogenic_index ~ df$dogs, paired = FALSE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = Atherogenic_index, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$VitaminD ~ df$dogs, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = VitaminD, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$Cholesterin ~ df$dogs, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = Cholesterin, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$Triglycerides ~ df$dogs, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = Triglycerides, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 5)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$HDL ~ df$dogs, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = HDL, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 2)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+wilcox.test(df$VLDL ~ df$dogs, paired = FALSE, conf.int = TRUE)
+
+df %>% 
+  filter(!(is.na(dogs))) %>% 
+  ggplot(aes(y = VLDL, x = dogs, fill = dogs))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 1)+
+  facet_grid(age_group ~ .) +
+  theme_classic()
+
+
+
+
+
+str(df)
+```  
+
+##описательная статистика по уровню достатка
+```{r}
+
+#сравнение выборок методом Kruskall-Wallis
+
+kruskal.test(Cholesterin ~ income_level, df)
+dunnTest(Cholesterin ~ income_level, data=df, method="holm") 
+
+
+my_comparisons <- list( c("18-44", "45-59"), c("45-59", "60-74"), c("60-74", "75-90"), c("18-44", "60-74"), c("18-44", "75-90"))
+  
+ggboxplot(df, x = "income_level", y = "Cholesterin",
+          color = "income_level", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+##вит. Д по достатку
+
+kruskal.test(VitaminD ~ income_level, df)
+dunnTest(VitaminD ~ income_level, data=df, method="holm") 
+
+ggboxplot(df, x = "income_level", y = "VitaminD",
+          color = "income_level", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+##ТГ по возрастным группам
+
+kruskal.test(Triglycerides ~ income_level, df)
+dunnTest(Triglycerides ~ income_level, data=df, method="holm") 
+
+
+ggboxplot(df, x = "income_level", y = "Triglycerides",
+          color = "income_level", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+
+##ЛПВП по возрастным группам
+kruskal.test(HDL ~ income_level, df)
+dunnTest(HDL ~ income_level, data=df, method="holm") 
+
+ggboxplot(df, x = "income_level", y = "HDL",
+          color = "income_level", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+##атеросклероз по возрастным группам
+
+kruskal.test(Atherogenic_index ~ income_level, df)
+dunnTest(Atherogenic_index ~ income_level, data=df, method="holm") 
+
+
+ggboxplot(df, x = "income_level", y = "Atherogenic_index",
+          color = "income_level", palette = "Tableau")+ 
+  stat_compare_means(comparisons = my_comparisons) +
+  stat_compare_means(label.y = 5)
+
+
+
+
+view(df)
+
+
+
+
+
+```  
+
+
+#Регрессионный анализ для витамин D, индекса атерогенности, холестерина и ТГ...
+```{r}
+
+df_upd <- df %>% 
+ dplyr::select(male, age, ever_smoker, cigarettes_per_day, times_sick, lives_alone, work_status, education_level, times_sick, lives_alone, spouse_or_partner, Cholesterin, Triglycerides, Atherogenic_index)
+
+df_upd <- df %>% 
+ dplyr::select(male, age, ever_smoker, cigarettes_per_day, Cholesterin, Triglycerides, Atherogenic_index, VitaminD)
+
+
+Hmisc::describe(df_upd)
+
+
+ggpairs(df_upd, aes(alpha = .25), 
+        lower = list(continuous = 'smooth_lm'))
+
+# Регрессия без факторов
+
+fit_VitaminD <- glm(VitaminD ~ 1, data = df)
+summary(fit_VitaminD)
+
+fit_Cholesterin <- glm(Cholesterin ~ 1, data = df)
+summary(fit_Cholesterin)
+
+
+fit_Atherogenic_index <- glm(Atherogenic_index ~ 1, data = df)
+summary(fit_Atherogenic_index)
+
+
+fit_Triglycerides <- glm(Triglycerides ~ 1, data = df)
+summary(fit_Triglycerides)
+
+
+#
+ggplot(df, aes(x = cigarettes_per_day, y = Atherogenic_index)) +
+  geom_point() + 
+  geom_smooth(method = lm, formula = 'y ~ x', se = FALSE)
+
+
+#возраст и наличие партнера - взаимодействие факторов, курение, пола, уровня образования и трудового статуса
+
+fit_1 <- glm(Cholesterin  ~ age*spouse_or_partner+male+ever_smoker+education_level+work_status+num_people_home, data = df)
+summary(fit_1)
+
+ggcoef_model(fit_1, exponentiate = FALSE, 
+             intercept = TRUE,
+             variable_labels = c(
+               age = "Age",
+               spouse_or_partner = "Live with spouse or partner",
+               male = "Male",
+               ever_smoker = "Smokers",
+               education_level = "Education level",
+               work_status = "Worker",
+               num_people_home = "Family"
+             )
+              )
+
+fit_2 <- glm(Atherogenic_index  ~ age*spouse_or_partner+male+ever_smoker+education_level+work_status+num_people_home, data = df)
+summary(fit_2)
+
+ggcoef_model(fit_2, exponentiate = FALSE, 
+             intercept = TRUE,
+             variable_labels = c(
+               age = "Age",
+               spouse_or_partner = "Live with spouse or partner",
+               male = "Male",
+               ever_smoker = "Smokers",
+               education_level = "Education level",
+               work_status = "Worker",
+               num_people_home = "Family"
+             )
+              )
+
+fit_3 <- glm(VitaminD   ~ age*spouse_or_partner+male+ever_smoker+education_level+work_status, data = df)
+summary(fit_3)
+
+ggcoef_model(fit_3, exponentiate = FALSE, 
+             intercept = TRUE,
+             variable_labels = c(
+               age = "Age",
+               spouse_or_partner = "Live with spouse or partner",
+               male = "Male",
+               ever_smoker = "Smokers",
+               education_level = "Education level",
+               work_status = "Worker",
+               num_people_home = "Family"
+             )
+              )
+
+fit_4 <- glm(Triglycerides   ~ age*spouse_or_partner+male+ever_smoker+education_level+work_status, data = df)
+summary(fit_4)
+
+
+ggcoef_model(fit_4, exponentiate = FALSE, 
+             intercept = TRUE,
+             variable_labels = c(
+               age = "Age",
+               spouse_or_partner = "Live with spouse or partner",
+               male = "Male",
+               ever_smoker = "Smokers",
+               education_level = "Education level",
+               work_status = "Worker",
+               num_people_home = "Family"
+             )
+              )
+
+str(df)
+view(df)
+
+
+
+tab_model(fit_1, fit_2, fit_3, fit_4)
+
+
+```
+
+
+#Propensity Score Matching in R - нравится мне, ничего не могу поделать с собой...=(
+```{r}
+
+mydata<-df
+attach(mydata)
+
+view(mydata)
+
+#одиночество
+
+match.it <- matchit(lives_alone ~ age + male + smoking, data = mydata, method="nearest", ratio=1)
+a <- summary(match.it)
+
+
+kable(a$nn, digits = 2, align = 'c', 
+      caption = 'Table 2: Sizes')
+
+
+kable(a$sum.matched, digits = 2, align = 'c', 
+      caption = 'Table 3: Summary for matched data')
+
+plot(match.it, type = 'jitter', interactive = FALSE)
+
+df.match <- match.data(match.it)
+
+str(df.match)
+
+wilcox.test(df.match$Atherogenic_index  ~ df.match$lives_alone, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df.match$Cholesterin  ~ df.match$lives_alone, paired = FALSE, conf.int = TRUE)
+
+wilcox.test(df.match$VitaminD  ~ df.match$lives_alone, paired = FALSE, conf.int = TRUE)
+
+df.match %>% 
+  filter(!(is.na(lives_alone))) %>% 
+  ggplot(aes(y = VitaminD, x = lives_alone, fill = lives_alone))+
+  geom_boxplot()+
+  stat_compare_means(label.y = 8)+
+  theme_classic()
+
+
+
+
+
+```
