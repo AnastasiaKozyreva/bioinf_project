@@ -31,9 +31,9 @@ pictures               --  graphical data providing visualisation for analysis
 ```
 ## Roles
 + An assessment of [`The association of Helicobacter Pylori infection with lifestyle`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/H_Pylori.Rmd) made by [*Anastasia Kozyreva*](https://github.com/AnastasiaKozyreva).
-+ An assessment of `...` made by [*Mark Kachanovskiy*](https://github.com/avemarkus).
-+ An assessment of `...` made by [*Kirill Usoltsev*](https://github.com/UsoltsevKirill).
++ An assessment of [`...`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Mark_lipidom_upd.Rmd) made by [*Mark Kachanovskiy*](https://github.com/avemarkus).
++ An assessment of [`...`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/IgE.Rmd) made by [*Kirill Usoltsev*](https://github.com/UsoltsevKirill).
 + `Search for association of IgG (H.pylori) with lipid profile` was made by *Julia Isakova*.
 + An assessment of `...` made by [*Anastasiia Pulkina*](https://github.com/AnastasiiaPulkina) and [*Pavel Kulanin*](https://github.com/PavelKu78).
-+ An assessment of `...` made by [*Fedor Logvin*](https://github.com/nshnt4evr).
++ An assessment of [`...`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Masks.Rmd) made by [*Fedor Logvin*](https://github.com/nshnt4evr).
 
