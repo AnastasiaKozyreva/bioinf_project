@@ -11,7 +11,7 @@ There are two directions in the study:
 susceptibility to diseases, especially Covid-19 desease 
 + Identification of typical clinical profiles and their assessment of association with lifestyle
 
-## Stucture of repository
+## Structure of repository
 
 ```
 
