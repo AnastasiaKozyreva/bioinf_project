@@ -30,7 +30,7 @@ pictures               --  graphical data providing visualisation for analysis
  
 ```
 ## Roles
-+ An assessment of `The association of Helicobacter Pylori infection with lifestyle` made by [*Anastasia Kozyreva*](https://github.com/AnastasiaKozyreva).
++ An assessment of [`The association of Helicobacter Pylori infection with lifestyle`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/H_Pylori.Rmd) made by [*Anastasia Kozyreva*](https://github.com/AnastasiaKozyreva).
 + An assessment of `...` made by [*Mark Kachanovskiy*](https://github.com/avemarkus).
 + An assessment of `...` made by [*Kirill Usoltsev*](https://github.com/UsoltsevKirill).
 + `Search for association of IgG (*h.pylori*) with lipid profile` was made by *Julia Isakova*.
