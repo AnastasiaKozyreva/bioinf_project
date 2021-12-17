@@ -1,9 +1,9 @@
 # Biostatistics and Health Data Analysis programm final project, 2021
 
-This repository contains study made as a final progect in Biostatistics and Health Data Analysis programm. 
-Here we utilized data provided by seroprevalence study of COVID-19 in Saint Petersburg, Russia.  It is a regional longitudinal cohort study aiming to evaluate the spread dynamics of the COVID-19 disease in the population of Saint Petersburg. 
+This repository contains study made as a final project in Biostatistics and Health Data Analysis programm. 
+Here we utilized data provided by seroprevalence study of COVID-19 in Saint Petersburg, Russia.  It is a regional longitudinal cohort study aiming to evaluate the spread dynamics of the COVID-19 disease in the population of Saint Petersburg, which is provided by [European University at St. Petersburg](https://eusp.org/projects/reprezentativnoe-populyacionnoe-issledovanie-rasprostranennosti-antitel-k-sars-cov-2-v-sankt-peterburge). 
 In the course of a large-scale medical and social research in St. Petersburg, conducted during the pandemic, unique data were collected related to
-to social, anamnestic, household and clinical and laboratory signs. 
+to social, anamnestic, household, clinical and laboratory signs. 
 The data allows testing various hypotheses about the relationship between these features, as well as formulate new hypotheses. 
 
 There are two directions in the study:  
