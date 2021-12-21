@@ -27,18 +27,19 @@ library(caTools)
 library(gridExtra)
 
 library(spearmanCI)
+library(survminer)
 
 ```
 
 #Загрузим данные
 
 ```{r}
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/other_test_results_matched_to_phone_survey_ids.rdata")
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/phone_survey_data.rdata")
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_B_results_matched_to_phone_survey_ids.rdata")
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_C_results_matched_to_phone_survey_ids.rdata")
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_D_results_matched_to_phone_survey_ids.rdata")
-load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/data/validation_of_covid_tests/test_nab.rda")
+load("other_test_results_matched_to_phone_survey_ids.rdata")
+load("phone_survey_data.rdata")
+load("test_B_results_matched_to_phone_survey_ids.rdata")
+load("test_C_results_matched_to_phone_survey_ids.rdata")
+load("test_D_results_matched_to_phone_survey_ids.rdata")
+load("test_nab.rda")
 
 ```
 
