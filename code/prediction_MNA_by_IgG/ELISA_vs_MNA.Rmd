@@ -1,0 +1,797 @@
+---
+title: "ELISAvsMNA"
+---
+
+# Подгрузим необходимые библиотеки
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyverse) 
+
+library(mlbench) 
+library(Hmisc) 
+library(GGally)
+library(corrplot) 
+
+library(rpart.plot) 
+library(treeheatr)
+
+library(caret) 
+
+library(Metrics) 
+library(pROC) 
+library(rocc)
+
+library(caTools) 
+library(gridExtra)
+
+library(spearmanCI)
+
+```
+
+#Загрузим данные
+
+```{r}
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/other_test_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/phone_survey_data.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_B_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_C_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/test_D_results_matched_to_phone_survey_ids.rdata")
+load("C:/Users/Sunshine/Desktop/Biostatistics_2021/Final_project/data/validation_of_covid_tests/test_nab.rda")
+
+```
+
+#Сделаем базу данных, с которой мы будем работать
+
+```{r}
+
+data_for_ab_IgG1 <-merge(test_B_results_matched_to_phone_survey_ids, test_C_results_matched_to_phone_survey_ids, by = "ID", all.x = T)
+data_for_ab_IgG2 <-merge(data_for_ab_IgG1, test_D_results_matched_to_phone_survey_ids, by = "ID", all.x = T)
+
+data_all<-merge(phone_survey_data, other_test_results_matched_to_phone_survey_ids, by = "ID", all.y = T)
+
+data_for_ab<- merge(data_for_ab_IgG2, data_all, by = "ID", all.y = T)
+
+data_for_ab<- data_for_ab %>% 
+  dplyr::select(c(ID, IgG_testB_quantitative, IgA_or_G_or_M_testC_quantitative, IgG_or_M_testD_quantitative, male, age, neutralizing_antibodies_quantitative))
+
+data_ab_only<- data_for_ab %>% 
+  dplyr::select(c(ID, IgG_testB_quantitative,IgA_or_G_or_M_testC_quantitative, IgG_or_M_testD_quantitative, neutralizing_antibodies_quantitative))
+
+data_ab_only = na.omit(data_ab_only)
+
+```
+
+#Выставим пороги чувствительности по методам ИФА - 1, а по MNA - 80. Оставим в базах данных только ответчиков. 
+
+```{r}
+
+data_Abbott<-data_for_ab %>% 
+  dplyr::select(c(ID, IgG_testB_quantitative, neutralizing_antibodies_quantitative)) %>% filter(IgG_testB_quantitative>=1&neutralizing_antibodies_quantitative>=80)
+
+data_Coronapass<-data_for_ab %>% 
+  dplyr::select(c(ID, IgA_or_G_or_M_testC_quantitative, neutralizing_antibodies_quantitative)) %>% filter(IgA_or_G_or_M_testC_quantitative>=1&neutralizing_antibodies_quantitative>=80)
+
+data_VectorBest<-data_for_ab %>% 
+  dplyr::select(c(ID, IgG_or_M_testD_quantitative, neutralizing_antibodies_quantitative)) %>% filter(IgG_or_M_testD_quantitative>=1&neutralizing_antibodies_quantitative>=80)
+
+```
+
+# Корреляция MNA и различных наборов для ИФА
+
+```{r}
+
+g1<- ggplot(data_ab_only, aes(x = neutralizing_antibodies_quantitative,
+                y=IgG_testB_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 0.75, color = "red")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 0.75, color = "red")+
+  ylab("ELISA Abbott")+
+  xlab("MNA")+
+  geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 10)
+
+cor_abbot<-cor.test( data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgG_testB_quantitative, method = c("spearman"), conf.level = 0.95)
+
+abbotCI<-spearmanCI(data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgG_testB_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+```
+
+```{r}
+
+g1_1<- ggplot(data_Abbott, aes(x = neutralizing_antibodies_quantitative,
+                y=IgG_testB_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 1, color = "grey50")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 1, color = "grey50")+
+  ylab("ELISA Abbott")+
+  xlab("MNA")+
+    geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 13)
+
+cor_abbot_pos<-cor.test( data_Abbott$neutralizing_antibodies_quantitative, data_Abbott$IgG_testB_quantitative, method = c("spearman"), conf.level = 0.95)
+
+abbotCI_pos<-spearmanCI(data_Abbott$neutralizing_antibodies_quantitative, data_Abbott$IgG_testB_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+
+```
+
+```{r}
+
+g2<- ggplot(data_ab_only, aes(x = neutralizing_antibodies_quantitative,
+                y=IgA_or_G_or_M_testC_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 0.75, color = "red")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 0.75, color = "red")+
+  ylab("ELISA Genetico")+
+  xlab("MNA")+
+    geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 10)
+
+cor_gen<-cor.test( data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgA_or_G_or_M_testC_quantitative, method = c("spearman"), conf.level = 0.95)
+
+genCI<-spearmanCI(data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgA_or_G_or_M_testC_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+
+```
+
+
+```{r}
+
+g2_2<-ggplot(data_Coronapass, aes(x = neutralizing_antibodies_quantitative,
+                y=IgA_or_G_or_M_testC_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 1, color = "grey50")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 1, color = "grey50")+
+  ylab("ELISA Genetico")+
+  xlab("MNA")+
+  geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 13)
+
+cor_gen_pos<-cor.test( data_Coronapass$neutralizing_antibodies_quantitative, data_Coronapass$IgA_or_G_or_M_testC_quantitative, method = c("spearman"), conf.level = 0.95)
+
+genCI<-spearmanCI(data_Coronapass$neutralizing_antibodies_quantitative, data_Coronapass$IgA_or_G_or_M_testC_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+
+```
+
+```{r}
+
+g3<- ggplot(data_ab_only, aes(x = neutralizing_antibodies_quantitative,
+                y=IgG_or_M_testD_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 0.75, color = "red")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 0.75, color = "red")+
+  ylab("ELISA Vector")+
+  xlab("MNA")+
+    geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 10)
+
+cor_vec<-cor.test( data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgG_or_M_testD_quantitative, method = c("spearman"), conf.level = 0.95)
+
+vecCI<-spearmanCI(data_ab_only$neutralizing_antibodies_quantitative, data_ab_only$IgG_or_M_testD_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+
+```
+
+```{r}
+
+g3_3<-ggplot(data_VectorBest, aes(x = neutralizing_antibodies_quantitative,
+                y=IgG_or_M_testD_quantitative)) +
+   geom_jitter(shape = 21,
+               size=1,
+               color = "black",
+               alpha = 0.8)+
+  scale_x_continuous(breaks = c(5, 10, 20, 40, 80, 160, 320, 640), trans = "log2")+
+   geom_hline(yintercept = 1,  linetype = "dashed", size = 1, color = "grey50")+
+   geom_vline(xintercept = 80,  linetype = "dashed", size = 1, color = "grey50")+
+  ylab("ELISA Vector")+
+  xlab("MNA")+
+  geom_smooth(method = lm, se = F) +
+  theme_classic2(base_size = 13)
+
+cor_vec_pos<-cor.test( data_VectorBest$neutralizing_antibodies_quantitative, data_VectorBest$IgG_or_M_testD_quantitative, method = c("spearman"), conf.level = 0.95)
+
+vecCI_pos<-spearmanCI(data_VectorBest$neutralizing_antibodies_quantitative, data_VectorBest$IgG_or_M_testD_quantitative, method = "Euclidean",   level      = 0.95, plot = F)
+
+
+```
+
+```{r}
+
+ggarrange(g1, g2, g3, ncol = 3, nrow = 1)
+
+```
+
+########################
+
+#Применим метод машинного обучения "Дерево решений" в задаче классификации "ответчик не ответчик к SARS-CoV", взяв в качестве разделителя титр антител 1:80 в MNA
+
+
+
+#Создадим базы данных, с которыми нам будет удобно работать
+
+```{r}
+
+data_for_ab<- data_for_ab %>% 
+rename_all(function(x)x %>% stringi::stri_replace_all_regex(c("IgG_testB_quantitative", "IgA_or_G_or_M_testC_quantitative", "IgG_or_M_testD_quantitative", "male", "age", "neutralizing_antibodies_quantitative"), c("Abbott", "Genetico", "Vector", "gender", "age", "Nab"), vectorize_all = FALSE))
+
+data_for_ab<- data_for_ab %>% 
+mutate('MNT 1:80' = ifelse (Nab  < 80, "No SARS-Cov-2", "SARS-Cov-2"))
+
+dataset <- data_for_ab %>% 
+    dplyr::select(!c( Nab))
+
+dataset$`MNT 1:80` <- as.factor(dataset$`MNT 1:80`)
+dataset$gender <- as.factor(dataset$gender)
+
+```
+
+
+```{r}
+
+dataset_80 <- data_for_ab%>% 
+  dplyr::select(c(Abbott, Genetico, Vector, 'MNT 1:80'))
+
+dataset_av <- data_for_ab%>% 
+  dplyr::select(c(Abbott, Vector, 'MNT 1:80'))
+
+dataset_80_all <- data_for_ab%>% 
+  dplyr::select(c(Abbott, Genetico, Vector, gender, age ,'MNT 1:80'))
+
+dataset_male <- dataset_80_all%>% 
+  filter(gender == 1)
+
+dataset_female <- dataset_80_all%>% 
+  filter(gender == 0)
+
+dataset_abbott<-data_for_ab %>% 
+  dplyr::select(c(Abbott, gender, age , 'MNT 1:80'))
+
+dataset_genetico<-data_for_ab %>% 
+  dplyr::select(c(Genetico, gender, age , 'MNT 1:80'))
+
+dataset_vector <- data_for_ab%>% 
+  dplyr::select(c( Vector, gender, age ,  'MNT 1:80'))
+
+```
+
+
+#Построим РОК-кривые для трех тестов против MNA.
+
+```{r}
+roc.list <- roc(`MNT 1:80` ~  Abbott + Genetico +Vector, data = dataset_80)
+ggroc(roc.list, cex= 1.5)+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+
+```
+
+# Сделаем машинное обучение методом "Дерево решений", посмотрев, можно ли предсказать, будет ли у человека в MNA титр >=1:80, зная результаты трех тестов ELISA. 
+
+
+#Рекурсивное разбиение и регрессионное дерево
+
+```{r}
+model <- rpart(`MNT 1:80` ~., data = dataset_80)
+par(xpd = NA) 
+plot(model)
+text(model, digits = 3)
+
+
+```
+
+# Посмотрим, сколько у нас ответчиков в MNA по порогу 1:80.
+
+```{r}
+response.column = 'MNT 1:80'
+response = dataset[[response.column]]
+table(response)
+
+
+```
+
+
+# Сделаем тестовую и тренировочную выборки
+
+```{r}
+
+set.seed(1265) 
+index <- sample(2, nrow(dataset_80), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_80 <- dataset_80[index==1, ] 
+test_base_80 <- dataset_80[index == 2, ] 
+
+table(train_base_80$`MNT 1:80`)
+table(test_base_80$`MNT 1:80`)
+```
+
+
+# Сделаем модель Дерево решений
+
+```{r}
+Nab_model_80 <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_80, 
+                        method = "class")
+summary(Nab_model_80)
+
+rpart.plot(x = Nab_model_80, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+# Нарисуем тепловое дерево для сделанной модели
+
+```{r}
+
+x <- partykit::as.party(Nab_model_80)
+heat_tree(x = x)
+
+```
+
+# Посмотрим метрики
+
+```{r}
+
+class_predicted_80 <- predict(object = Nab_model_80,  
+                           newdata = test_base_80,   
+                           type = "class")
+confusionMatrix(data = class_predicted_80,       
+                reference = as.factor(test_base_80$`MNT 1:80`))
+heat_tree(
+  x = x,
+  data_test = test_base_80)
+```
+
+# Построим РОК-кривую для нашей модели
+
+```{r}
+pred_prob_80 <-as.data.frame( predict(Nab_model_80, test_base_80, type="prob"))
+
+roc_80 <- roc(test_base_80$`MNT 1:80`, pred_prob_80$`SARS-Cov-2`)
+
+ggroc(roc_80, cex= 1.2, color = '#A6611A')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+```
+
+
+## Дальше сделаем машиной обучение индивидуально для каждого теста. Но будем учитывать пол и возраст. Вдруг, это поможет увеличить специфичность нашей модели. 
+
+#Для системы Abbott
+
+```{r}
+
+index <- sample(2, nrow(dataset_abbott), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_abbott <- dataset_abbott[index==1, ] 
+test_base_abbott <- dataset_abbott[index == 2, ] 
+
+table(train_base_abbott$`MNT 1:80`)
+table(test_base_abbott$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_abbott <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_abbott, 
+                        method = "class")
+summary(Nab_model_abbott)
+
+rpart.plot(x = Nab_model_abbott, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+abbott <- partykit::as.party(Nab_model_abbott)
+heat_tree(x = abbott)
+
+class_predicted_abbott <- predict(object = Nab_model_abbott,  
+                           newdata = test_base_abbott,   
+                           type = "class")
+confusionMatrix(data = class_predicted_abbott,       
+                reference = as.factor(test_base_abbott$`MNT 1:80`))
+heat_tree(
+  x = abbott,
+  data_test = test_base_abbott)
+```
+
+```{r}
+pred_prob_abbott <-as.data.frame( predict(Nab_model_abbott, test_base_abbott, type="prob"))
+
+roc_abbott <- roc(test_base_abbott$`MNT 1:80`, pred_prob_abbott$`SARS-Cov-2`)
+
+r_ab<- ggroc(roc_abbott, cex= 1.2, color = 'green')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()+
+  ggtitle("ELISA Abbott") +
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")    
+
+```
+
+#Для системы Genetico
+
+```{r}
+
+index <- sample(2, nrow(dataset_genetico), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_genetico <- dataset_genetico[index==1, ] 
+test_base_genetico <- dataset_genetico[index == 2, ] 
+
+table(train_base_genetico$`MNT 1:80`)
+table(test_base_genetico$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_genetico <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_genetico, 
+                        method = "class")
+summary(Nab_model_genetico)
+
+rpart.plot(x = Nab_model_genetico, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+genetico <- partykit::as.party(Nab_model_genetico)
+heat_tree(x = genetico)
+
+class_predicted_genetico <- predict(object = Nab_model_genetico,  
+                           newdata = test_base_genetico,   
+                           type = "class")
+confusionMatrix(data = class_predicted_genetico,       
+                reference = as.factor(test_base_genetico$`MNT 1:80`))
+heat_tree(
+  x = genetico,
+  data_test = test_base_genetico)
+```
+
+```{r}
+pred_prob_genetico <-as.data.frame( predict(Nab_model_genetico, test_base_genetico, type="prob"))
+
+roc_genetico <- roc(test_base_genetico$`MNT 1:80`, pred_prob_genetico$`SARS-Cov-2`)
+
+r_gen<-ggroc(roc_genetico, cex= 1.2, color = 'red')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()+
+  ggtitle("ELISA Genetico") +
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")
+
+```
+
+# Для системы Vector
+
+```{r}
+
+index <- sample(2, nrow(dataset_vector), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_vector <- dataset_vector[index==1, ] 
+test_base_vector <- dataset_vector[index == 2, ] 
+
+table(train_base_vector$`MNT 1:80`)
+table(test_base_vector$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_vector <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_vector, 
+                        method = "class")
+summary(Nab_model_vector)
+
+rpart.plot(x = Nab_model_vector, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+vector <- partykit::as.party(Nab_model_vector)
+heat_tree(x = vector)
+
+class_predicted_vector <- predict(object = Nab_model_vector,  
+                           newdata = test_base_vector,   
+                           type = "class")
+confusionMatrix(data = class_predicted_vector,       
+                reference = as.factor(test_base_vector$`MNT 1:80`))
+heat_tree(
+  x = vector,
+  data_test = test_base_vector)
+```
+
+```{r}
+pred_prob_vector <-as.data.frame( predict(Nab_model_vector, test_base_vector, type="prob"))
+
+roc_vector <- roc(test_base_vector$`MNT 1:80`, pred_prob_vector$`SARS-Cov-2`)
+
+r_vec<- ggroc(roc_vector, cex= 1.2,  color = 'blue')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2() +
+  ggtitle("ELISA Vector") +
+  labs(x = "1 - Specificity",
+       y = "Sensitivity")
+
+
+```
+
+```{r}
+
+roc.list<-ggarrange(r_ab, r_gen, r_vec, ncol = 3, nrow = 1)
+
+
+```
+
+
+# Возьмем в обучение все (ELISA, пол, возраст)
+
+
+```{r}
+
+index <- sample(2, nrow(dataset_80_all), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_80_all <- dataset_80_all[index==1, ] 
+test_base_80_all <- dataset_80_all[index == 2, ] 
+
+table(train_base_80_all$`MNT 1:80`)
+table(test_base_80_all$`MNT 1:80`)
+```
+
+
+# Сделаем модель Дерево решений
+
+```{r}
+Nab_model_80_all <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_80_all, 
+                        method = "class")
+summary(Nab_model_80_all)
+
+rpart.plot(x = Nab_model_80_all, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+# Нарисуем тепловое дерево для сделанной модели
+
+```{r}
+
+all <- partykit::as.party(Nab_model_80_all)
+heat_tree(x = all)
+
+```
+
+# Посмотрим метрики
+
+```{r}
+
+class_predicted_80_all <- predict(object = Nab_model_80_all,  
+                           newdata = test_base_80_all,   
+                           type = "class")
+confusionMatrix(data = class_predicted_80_all,       
+                reference = as.factor(test_base_80_all$`MNT 1:80`))
+heat_tree(
+  x = all,
+  data_test = test_base_80_all)
+```
+
+# Построим РОК-кривую для нашей модели
+
+```{r}
+pred_prob_80_all <-as.data.frame( predict(Nab_model_80_all, test_base_80_all, type="prob"))
+
+roc_80_all <- roc(test_base_80_all$`MNT 1:80`, pred_prob_80_all$`SARS-Cov-2`)
+
+ggroc(roc_80_all, color = '#A6611A', cex= 1.2 )+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+```
+
+
+##Попробуем убрать тест Генетико. Кажется, что он все портит. 
+# Сделаем тестовую и тренировочную выборки
+
+```{r}
+
+index <- sample(2, nrow(dataset_av), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_av <- dataset_av[index==1, ] 
+test_base_av <- dataset_av[index == 2, ]
+
+table(train_base_av$`MNT 1:80`)
+table(test_base_av$`MNT 1:80`)
+```
+
+
+# Сделаем модель Дерево решений
+
+```{r}
+Nab_model_av <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_av, 
+                        method = "class")
+summary(Nab_model_av)
+
+rpart.plot(x = Nab_model_av, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+
+```{r}
+
+x_av <- partykit::as.party(Nab_model_av)
+heat_tree(x = x_av)
+
+class_predicted_av <- predict(object = Nab_model_av,  
+                           newdata = test_base_av,   
+                           type = "class")
+confusionMatrix(data = class_predicted_av,       
+                reference = as.factor(test_base_av$`MNT 1:80`))
+heat_tree(
+  x = x_av,
+  data_test = test_base_av)
+```
+
+# Построим РОК-кривую 
+
+```{r}
+pred_prob_av <-as.data.frame( predict(Nab_model_av, test_base_av, type="prob"))
+
+roc_av <- roc(test_base_av$`MNT 1:80`, pred_prob_av$`SARS-Cov-2`)
+
+ggroc(roc_av, cex= 1.2, color = '#A6611A')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+```
+
+#А что если наша тест-системы работают лцучше на мужчинах? проверим эту гипотезу. 
+
+##Разделим на мальчиков и девочек
+
+#Посмотрим для мальчиков
+```{r}
+
+
+index <- sample(2, nrow(dataset_male), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_male <- dataset_male[index==1, ] # Train data
+test_base_male <- dataset_male[index == 2, ] # Test data
+#check the ratio of pos/neg cases in the train/test data:
+table(train_base_male$`MNT 1:80`)
+table(test_base_male$`MNT 1:80`)
+```
+
+```{r}
+Nab_model_male <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_male, 
+                        method = "class")
+summary(Nab_model_male)
+
+rpart.plot(x = Nab_model_male, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+
+```{r}
+
+x_male <- partykit::as.party(Nab_model_male)
+heat_tree(x = x_male)
+
+class_predicted_male <- predict(object = Nab_model_male,  
+                           newdata = test_base_male,   
+                           type = "class")
+confusionMatrix(data = class_predicted_male,       
+                reference = as.factor(test_base_male$`MNT 1:80`))
+heat_tree(
+  x = x_male,
+  data_test = test_base_male)
+```
+
+# Построим РОК-кривую 
+
+```{r}
+pred_prob_male <-as.data.frame( predict(Nab_model_male, test_base_male, type="prob"))
+# ROC value
+roc_male <- roc(test_base_male$`MNT 1:80`, pred_prob_male$`SARS-Cov-2`)
+
+ggroc(roc_male, cex= 1.2, color = '#A6611A')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+```
+
+#Посмотрим для девочек
+```{r}
+
+index <- sample(2, nrow(dataset_female), prob = c(0.8, 0.2), replace = TRUE)
+
+train_base_female <- dataset_female[index==1, ] 
+test_base_female <- dataset_female[index == 2, ]
+
+table(train_base_female$`MNT 1:80`)
+table(test_base_female$`MNT 1:80`)
+```
+
+
+```{r}
+Nab_model_female <- rpart(formula = `MNT 1:80` ~., 
+                        data = train_base_female, 
+                        method = "class")
+summary(Nab_model_female)
+
+rpart.plot(x = Nab_model_female, yesno = 2, 
+           fallen.leaves = TRUE, clip.right.labs = T)
+
+
+
+```
+
+```{r}
+
+x_female <- partykit::as.party(Nab_model_female)
+heat_tree(x = x_female)
+
+class_predicted_female <- predict(object = Nab_model_female,  
+                           newdata = test_base_female,   
+                           type = "class")
+confusionMatrix(data = class_predicted_female,       
+                reference = as.factor(test_base_female$`MNT 1:80`))
+heat_tree(
+  x = x_female,
+  data_test = test_base_female)
+```
+
+
+```{r}
+pred_prob_80 <-as.data.frame( predict(Nab_model_80, test_base_80, type="prob"))
+
+roc_80 <- roc(test_base_80$`MNT 1:80`, pred_prob_80$`SARS-Cov-2`)
+
+ggroc(roc_80, cex= 1.2, color = '#A6611A')+
+  geom_abline(intercept = 1, slope = 1, color = "grey50", size = 0.8, linetype = 2)+
+  theme_classic2()
+
+```
+
