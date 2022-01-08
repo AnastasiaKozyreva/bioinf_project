@@ -8,6 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+# установка требуемых пакетов
 library(tidyverse)
 library(ggplot2)
 library(FSA)
@@ -27,8 +28,8 @@ library(tidymodels)
 library(webshot)
 ```
 
-
-# Считываю .rdata файлы ../bioinf_project/data/wave2/....
+# Загрузка и подготовка данных
+## Считываю .rdata файлы ../bioinf_project/data/wave2/....
 ```{r}
 load("C:/Biostat2021/final_project/bioinf_project/data/wave2/phone_survey/phone_survey_data.rdata")
 
@@ -44,7 +45,7 @@ load("C:/Biostat2021/final_project/bioinf_project/data/wave2/test_results/other_
 ```
 
 
-# Меняем, где необходимо, тип данных на факторные в phone_survey_data, сохраняем в таблицу phone_survey 
+## Меняем, где необходимо, тип данных на факторные в phone_survey_data, сохраняем в таблицу phone_survey 
 ```{r}
 phone_survey_data %>% 
   mutate(across(!c("interviewer", "interview_duration", ,"smoking_start_age", "smoking_giveup_age", "age", "cigarettes_per_day", "coffee_cups_per_day", "num_people_home", "error_in_randomization", "interview_date"), function(x) x %>% as.factor())) -> phone_survey
@@ -54,7 +55,7 @@ phone_survey_data %>%
 
 ```
 
-# Меняем тип данных в переменных ID и visited_clinic на факторные в other_test_results_matched_to_phone_survey_ids, сохраняем в таблицу tests 
+## Меняем тип данных в переменных ID и visited_clinic на факторные в other_test_results_matched_to_phone_survey_ids, сохраняем в таблицу tests 
 ```{r}
 other_test_results_matched_to_phone_survey_ids %>% 
   mutate(across(c("ID", "visited_clinic"), function(x) x %>% as.factor())) -> tests
@@ -65,39 +66,34 @@ other_test_results_matched_to_phone_survey_ids %>%
 ```
 
 
-# Объединяем данные телефонного опроса и результаты лабораторного тестирования
+## Объединяем данные телефонного опроса и результаты лабораторного тестирования
 
 ```{r}
 merged_data <- merge(phone_survey, tests, by = "ID", all.y = T) #здесь объединены данные сероопроса и данные лабораторных исследований.   
 
-
+# Структура полученного датасета
 # merged_data %>% 
 #    glimpse()
 
 
 ```
 
-# Создаем факторную переменные age_grouped и age_grouped_who (как предложила Юлия) в датасете merged_data 
+## Создаем факторные переменные с группировкой по возрасту age_grouped и age_grouped_who в датасете merged_data 
 ```{r}
 max(merged_data$age)
 min(merged_data$age)
 merged_data$age_grouped <- cut(merged_data$age, breaks = c(17, 20, 25, 30, 35, 40, 45, 50,55, 60, 95), labels = c("18-20", "21-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51-55", "56-60", "61+")) 
 
-merged_data$age_grouped_who <- cut(merged_data$age, breaks = c(17, 44, 59, 74, 90, 95), labels = c("18-44", "45-59", "60-74", "75-90", "90+"))
+merged_data$age_grouped_who <- cut(merged_data$age, breaks = c(17, 44, 59, 74, 90, 95), labels = c("18-44", "45-59", "60-74", "75-90", "90+")) #18-44 (молодые), 45-59 (средний возраст), 60-74 (пожилые) и 75-90 (старческий  возраст) ну и старше (долгожители)
 
-#18-44 (молодые), 45-59 (средний возраст), 60-74 (пожилые) и 75-90 (старческий  возраст) ну и старше (долгожители)
 
-merged_data %>% 
-  #filter(age == 18) %>% 
-  select(age, age_grouped, age_grouped_who) %>%  #проверила, как разбилось
-  head()
 
 
 
 
 ```
 
-# Посмотрим на возрастные группы
+# Визуализация распределения испытуемых по возрастным группам
 ```{r}
 ggplot(data = merged_data, aes(x = age_grouped))+
   geom_bar()+
@@ -113,7 +109,7 @@ ggplot(data = merged_data, aes(x = age_grouped_who))+
 
 
 
-# Смотрим на IgG_hpylori разбитый по age_grouped. 
+# Визуализация количественного показателя IgG_hpylori в различных возрастных группах (age_grouped). 
 ```{r,  width = 15, height =  10}
 merged_data %>%
   filter(!(is.na(IgG_hpylori))) %>% 
@@ -135,6 +131,8 @@ merged_data %>%
 ```
 Исходя из полученной визуализации отмечаем порог в 30 ед/мл. Далее будем использовать этот порог и порог в 10 ед/мл (из литературы).
 
+
+Проверка допущений для использования дисперсионного анализа для выявления различий по признаку "титр IgG к Helicobacter Pylori (IgG_hpylori)" между различными возрастными группами
 ```{r}
 hpylori_anova <- aov(IgG_hpylori ~ age_grouped, data = merged_data)
 # Гомогенность дисперсий
@@ -147,8 +145,10 @@ plot(hpylori_anova, 2)
 
 
 ```
+Допущения не соблюдены, поэтому используем непараметрический аналог дисперсионного анализа.
 
-# Выполняем тест Kruskall-Wallis и в качестве post-hoc Dunn’s test. 
+
+# Выполняем тест Kruskall-Wallis и в качестве post-hoc Dunn’s test для выявления различий по признаку "титр IgG к Helicobacter Pylori (IgG_hpylori)" между различными возрастными группами. 
 
 ```{r}
 kruskal.test(IgG_hpylori ~ age_grouped, data = merged_data)
@@ -160,10 +160,14 @@ dunnTest_hpylori %>%
   filter(P.adj < 0.05)
 
 ```
+ОБнаружены различия между многими возрастными групппами. В дальнейшем разумно использовать регрессию для оценки влияния фактора возраста на уровень IgG у испытуемых.
 
 
-#  Уровень IgG у испытуемых, живущих с партнером 
+
+#  Визуализация уровня IgG у испытуемых, живущих с партнером. 
 ```{r}
+# Визуализация количественного признака - уровня IgG в группах испытуемых, живущих с партнером или без партнера при помощи box-plot.
+
 merged_data %>% 
   filter(!(is.na(spouse_or_partner))) %>% 
   ggplot(aes(y = IgG_hpylori, x = spouse_or_partner))+
@@ -173,7 +177,7 @@ merged_data %>%
   theme_classic()
 
 
-
+# Визуализация количественного признака - уровня IgG в группах испытуемых, живущих с партнером или без партнера при помощи гистограммы.
 
 merged_data %>% 
   filter(!(is.na(spouse_or_partner))) %>% 
@@ -181,20 +185,38 @@ merged_data %>%
   geom_histogram()+
   facet_grid(.~spouse_or_partner)
 
-wilcox.test(IgG_hpylori ~ spouse_or_partner, data = merged_data)
 
 ```
+Исходя из визуализации можно предположить, что уровень IgG к Helicobacter Pylori зависит от того, живет человек с партнером или нет.
 
-# Разбиваем испытуеммых на 2 группы - IgG к Хеликобактер ниже и  выше/равно порогу (10 и 30) 
+### Далее строим модели биномиальной регрессии. В качестве зависимой переменной - уровень IgG выше или ниже порогового значения. В качестве предикторов - возраст, наличие партнера или супруга, наличие детей, уровень дохода, курение (курение сейчас или курение вообще (например раньше курил, сейчас бросил). 
+
+# Подготовка данных к моделированию.
+## Разбиваем испытуеммых на 2 группы - IgG к Хеликобактер ниже и  выше/равно порогу (10 и 30) 
 ```{r}
 
-merged_data$IgG_hpylori_10EIU <- ifelse(merged_data$IgG_hpylori < 10, 0, 1) # 1 - больше 10, 0 - меньше 10. 10 - на основании японской статьи, там тоже был порог в 10
+merged_data$IgG_hpylori_10EIU <- ifelse(merged_data$IgG_hpylori < 10, 0, 1) # 1 - больше 10, 0 - меньше 10. 10 - на основании японской статьи, где был использован порог 10
 
 merged_data$IgG_hpylori_30EIU <- ifelse(merged_data$IgG_hpylori < 30, 0, 1) # 1 - больше 30, 0 - меньше 30. 
 
+
 ```
 
-## Доля и количество испытуемых с повышенным титром IgG к H.Pylori в разных возрастных группах для порога 10
+## СОздаем переменную ever_smokers (курил ли человек когда-либо)
+```{r}
+
+merged_data$ever_smokers <- as.factor(ifelse(merged_data$smoking == 1| merged_data$smoked_previously == 1, 1, 0))
+
+merged_data$smoking_experience <-  ifelse(merged_data$smoking == 1, (merged_data$age - merged_data$smoking_start_age), 
+                                          (merged_data$smoking_giveup_age - merged_data$smoking_start_age))
+
+
+
+
+```
+
+
+# Визуализация: Доля и количество испытуемых с повышенным титром IgG к H.Pylori в разных возрастных группах для порога 10
 ```{r, fig.height = 10, fig.width=15}
 
 merged_data |> 
@@ -251,6 +273,7 @@ merged_data |>
 
 
 ```
+
 ## Доля и количество испытуемых с повышенным титром IgG к H.Pylori в разных возрастных группах для порога 30
 ```{r, fig.height = 10, fig.width=15}
 
@@ -309,25 +332,15 @@ merged_data |>
 
 ```
 
-# СОздаем переменную ever_smokers (курил ли человек когда-либо)
-```{r}
-
-merged_data$ever_smokers <- as.factor(ifelse(merged_data$smoking == 1| merged_data$smoked_previously == 1, 1, 0))
-
-merged_data$smoking_experience <-  ifelse(merged_data$smoking == 1, (merged_data$age - merged_data$smoking_start_age), 
-                                          (merged_data$smoking_giveup_age - merged_data$smoking_start_age))
 
 
 
 
-```
+# Строим модели биномиальной регрессии
+## Создаем датасет, в котором оставляем зависимые переменные и предикторы и удаляем при этом NA.
 
-
-
-
-# Строим модели на основании логистической регрессии
-## Создаем датасет, в котором оставляем зависимые переменные и предикторы, удаляем при этом NA.
-
+Зависимые переменные:IgG_hpylori_10EIU, IgG_hpylori_30EIU
+предикторы: age, smoking, ever_smokers, under_18, spouse_or_partner, income_level
 ```{r}
 df_for_model <- merged_data |> 
   select(c(age, smoking, ever_smokers, under_18, spouse_or_partner, income_level,  IgG_hpylori, IgG_hpylori_10EIU, IgG_hpylori_30EIU)) |> 
@@ -337,7 +350,7 @@ df_for_model <- merged_data |>
 
 ```
 
-Для порога 10:
+# Модель для порога 10:
 ## Строим intercept-only model
 
 ```{r}
@@ -349,7 +362,9 @@ summary(fit10_0)
 
 ```
 
-## Предполагаем, что титр IgG к H.Pylori может зависеть от различных факторов:
+## строим модель с предикторами (1):
+
+Предполагаем, что титр IgG к H.Pylori может зависеть от различных факторов:
 от возраста истытуемых, 
 от наличия детей в окружении, 
 от наличия супруга/ партнера,
@@ -363,36 +378,38 @@ summary(fit10_1)
 
 
 ```
-# предсказываем вероятность наличия инфекции (порог 10, 1 модель)
+
+# предсказываем вероятность, с которой у испытуемого согласно модели будет повышенный уровень антител к H.Pylori (порог 10, 1 модель)
 
 ```{r}
-
+# Вероятность повышенного уровня АТ
 df_for_model$HP_10_prob_1 <- predict(object = fit10_1, type = "response")
 
+# Визуализация AUC
 pred_fit10_1 <- prediction(df_for_model$HP_10_prob_1, df_for_model$IgG_hpylori_10EIU)
 perf_fit10_1 <- performance(pred_fit10_1, "tpr", "fpr")
 
+# Вычисляем AUC
 auc10_1 <- performance(pred_fit10_1, "auc") # 0.624
 
 str(auc10_1)
 
+
+# Находим порог принятия решения о том, есть ли у человека пвышенный уровень антител, исходя из вероятности, полученной при моделировании
 plot(perf_fit10_1, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
-
-
 perf_fit10_1_spec <- performance(pred_fit10_1, x.measure = "cutoff", measure = "spec")
 perf_fit10_1_sens <- performance(pred_fit10_1, x.measure = "cutoff", measure = "sens")
 perf_fit10_1_acc <- performance(pred_fit10_1, x.measure = "cutoff", measure = "acc")
-
-
-
 plot(perf_fit10_1_spec, col = "red", lwd = 2)
 plot(add = T, perf_fit10_1_sens, col = "green", lwd = 2 )
 plot(add = T, perf_fit10_1_acc, col = "blue", lwd = 2)
 abline(v = 0.61, lwd = 2)
 legend(x = 0.75, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.61"), lty = 1, col = c('red', 'green', 'blue', 'black'), cex = 1, lwd = 2)
 
+# Порог принятия решения - о.61
 
 
+# Проверяем, насколько точно модель предсказывает
 df_for_model$HP_10_resp_1 <- ifelse(df_for_model$HP_10_prob_1 > 0.61, 1,0)
 df_for_model$HP_10_resp_correct_1 <- ifelse(df_for_model$HP_10_resp_1 == df_for_model$IgG_hpylori_10EIU, 1, 0)
 
@@ -405,6 +422,7 @@ table(df_for_model$HP_10_resp_correct_1)
 table(df_for_model$IgG_hpylori_10EIU, df_for_model$HP_10_resp_1)
 
 
+
 sensitivity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_10_resp_1)) # чувствительность
 specificity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_10_resp_1)) # специфичность
 
@@ -413,7 +431,9 @@ specificity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_10_r
 
 
 
-# Предполагаем, что титр IgG к H.Pylori может зависить от различных факторов:
+# строим  еще одну модель с предикторами (2):
+
+Предполагаем, что титр IgG к H.Pylori может зависить от различных факторов:
 от возраста истытуемых, 
 от наличия детей в окружении,
 от наличия супруга/ партнера,
@@ -428,35 +448,39 @@ summary(fit10_2)
 
 
 ```
-# предсказываем вероятность наличия инфекции (порог 10, 2 модель)
-```{r}
 
+# предсказываем вероятность, с которой у испытуемого согласно модели будет повышенный уровень антител к H.Pylori (порог 10, 2 модель)
+
+```{r}
+# Вероятность повышенного уровня АТ
 df_for_model$HP_10_prob_2 <- predict(object = fit10_2, type = "response")
 
+# Визуализация AUC
 pred_fit10_2 <- prediction(df_for_model$HP_10_prob_2, df_for_model$IgG_hpylori_10EIU)
 perf_fit10_2 <- performance(pred_fit10_2, "tpr", "fpr")
 
+# Вычисляем AUC
 auc10_2 <- performance(pred_fit10_2, "auc") # 0.63
 
 str(auc10_2)
 
+
 plot(perf_fit10_2, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
 
-
+# Находим порог принятия решения о том, есть ли у человека пвышенный уровень антител, исходя из вероятности, полученной при моделировании
 perf_fit10_2_spec <- performance(pred_fit10_2, x.measure = "cutoff", measure = "spec")
 perf_fit10_2_sens <- performance(pred_fit10_2, x.measure = "cutoff", measure = "sens")
 perf_fit10_2_acc <- performance(pred_fit10_2, x.measure = "cutoff", measure = "acc")
-
-
-
 plot(perf_fit10_2_spec, col = "red", lwd = 2)
 plot(add = T, perf_fit10_2_sens, col = "green", lwd = 2 )
 plot(add = T, perf_fit10_2_acc, col = "blue", lwd = 2)
 abline(v = 0.615, lwd = 2)
 legend(x = 0.75, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.615"), lty = 1, col = c('red', 'green', 'blue', 'black'), cex = 1, lwd = 2)
 
+# Порог принятия решения 0.615
 
 
+# Проверяем, насколько точно модель предсказывает
 df_for_model$HP_10_resp_2 <- ifelse(df_for_model$HP_10_prob_2 > 0.615, 1,0)
 df_for_model$HP_10_resp_correct_2 <- ifelse(df_for_model$HP_10_resp_2 == df_for_model$IgG_hpylori_10EIU, 1, 0)
 
@@ -471,7 +495,7 @@ specificity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_10_r
 ```
 
 
-Для порога 30:
+# Строим модель биномиальной регрессии для порога 30:
 
 ## Строим intercept-only model
 
@@ -484,7 +508,9 @@ summary(fit30_0)
 
 ```
 
-## Предполагаем, что титр IgG к H.Pylori может зависеть от различных факторов:
+##Строим модель с предикторами (1)
+
+Предполагаем, что титр IgG к H.Pylori может зависеть от различных факторов:
 от возраста истытуемых, 
 от наличия детей в окружении, 
 от наличия супруга/ партнера,
@@ -498,39 +524,40 @@ summary(fit30_1)
 
 
 ```
-# предсказываем вероятность наличия инфекции (порог 30, 1 модель)
+# предсказываем вероятность, с которой у испытуемого согласно модели будет повышенный уровень антител к H.Pylori (порог 30, 1 модель)
 
 ```{r}
-
+# Вероятность повышенного уровня АТ
 df_for_model$HP_30_prob_1 <- predict(object = fit30_1, type = "response")
 
+# Визуализация AUC
 pred_fit30_1 <- prediction(df_for_model$HP_30_prob_1, df_for_model$IgG_hpylori_30EIU)
 perf_fit30_1 <- performance(pred_fit30_1, "tpr", "fpr")
 
+# Вычисляем AUC
 auc30_1 <- performance(pred_fit30_1, "auc") # 0.628
 
 str(auc30_1)
 
+# png("ROC_30_1.png")
+# plot(perf_fit30_1, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
+# dev.off()
 
-png("ROC_30_1.png")
-plot(perf_fit30_1, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
-dev.off()
 
+# Находим порог принятия решения о том, есть ли у человека повышенный уровень антител, исходя из вероятности, полученной при моделировании
 perf_fit30_1_spec <- performance(pred_fit30_1, x.measure = "cutoff", measure = "spec")
 perf_fit30_1_sens <- performance(pred_fit30_1, x.measure = "cutoff", measure = "sens")
 perf_fit30_1_acc <- performance(pred_fit30_1, x.measure = "cutoff", measure = "acc")
-
-
-
-
 plot(perf_fit30_1_spec, col = "red", lwd = 2)
 plot(add = T, perf_fit30_1_sens, col = "green", lwd = 2 )
 plot(add = T, perf_fit30_1_acc, col = "blue", lwd = 2)
 abline(v = 0.46, lwd = 2)
 legend(x = 0.6, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.46"), lty = 1, col = c('red', 'green', 'blue', 'black'), cex = 1, lwd = 2)
 
- 
+# ПОрог принятия решения - 0.46
 
+ 
+# Проверяем, насколько точно модель предсказывает 
 df_for_model$HP_30_resp_1 <- ifelse(df_for_model$HP_30_prob_1 > 0.46, 1,0)
 df_for_model$HP_30_resp_correct_1 <- ifelse(df_for_model$HP_30_resp_1 == df_for_model$IgG_hpylori_30EIU, 1, 0)
 
@@ -544,7 +571,8 @@ specificity(data = df_for_model, as.factor(IgG_hpylori_30EIU), as.factor(HP_30_r
 ```
 
 
-# Предполагаем, что титр IgG к H.Pylori может зависить от различных факторов:
+## Строим модель с предикторами (2)
+Предполагаем, что титр IgG к H.Pylori может зависить от различных факторов:
 от возраста истытуемых, 
 от наличия детей в окружении,
 от наличия супруга/ партнера,
@@ -561,10 +589,10 @@ summary(fit30_2)
 
 ```
 
-# предсказываем вероятность наличия инфекции (порог 30, 2 модель)
+# предсказываем вероятность, с которой у испытуемого, согласно модели, будет повышенный уровень антител к H.Pylori (порог 30, 2 модель)
 
 ```{r}
-
+# Вероятность повышенного уровня АТ
 df_for_model$HP_30_prob_2 <- predict(object = fit30_2, type = "response")
 
 pred_fit30_2 <- prediction(df_for_model$HP_30_prob_2, df_for_model$IgG_hpylori_30EIU)
@@ -577,20 +605,19 @@ str(auc30_2)
 plot(perf_fit30_2, colorize = T, print.cutoffs.at = seq(0,1, by = 0.1))
 
 
+# Находим порог принятия решения о том, есть ли у человека повышенный уровень антител, исходя из вероятности, полученной при моделировании
 perf_fit30_2_spec <- performance(pred_fit30_2, x.measure = "cutoff", measure = "spec")
 perf_fit30_2_sens <- performance(pred_fit30_2, x.measure = "cutoff", measure = "sens")
 perf_fit30_2_acc <- performance(pred_fit30_2, x.measure = "cutoff", measure = "acc")
-
-
-
 plot(perf_fit30_2_spec, col = "red", lwd = 2)
 plot(add = T, perf_fit30_2_sens, col = "green", lwd = 2 )
 plot(add = T, perf_fit30_2_acc, col = "blue", lwd = 2)
 abline(v = 0.462, lwd = 2)
 legend(x = 0.6, y = 0.35, c("spec", "sens", "accuracy", "cutoff 0.46"), lty = 1, col = c('red', 'green', 'blue', 'black'), cex = 1, lwd = 2)
 
+# Порог принятия решения - 0.462
 
-
+# Проверяем, насколько точно модель предсказывает
 df_for_model$HP_30_resp_2 <- ifelse(df_for_model$HP_30_prob_1 > 0.462, 1,0)
 df_for_model$HP_30_resp_correct_2 <- ifelse(df_for_model$HP_30_resp_2 == df_for_model$IgG_hpylori_30EIU, 1, 0)
 
@@ -603,7 +630,7 @@ sensitivity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_30_r
 specificity(data = df_for_model, as.factor(IgG_hpylori_10EIU), as.factor(HP_30_resp_2)) # специфичность
 ```
 
-Сравнение каждой из моделей с нулевой моделью.
+Сравнение каждой из моделей (1 и 2 для порогов 10 и 30) с нулевыми моделями
  
 ```{r}
 anova(fit10_1, test = "Chisq")
@@ -653,8 +680,6 @@ webshot("models.html", "models.png")
 
 
 # Строим более глубокие модели со взаимодействиями (возраст и наличие супруга, возраст и наличие детей).
-
-
 ## для порога 30:
 
 fit10_int_1, fit10_int_2, fit10_int_3 - модели, которые учитывают сожителей (дети или супруги)
@@ -731,7 +756,24 @@ summary(fit10_int_3)
 
 ```
 
-Форест-плот для визуализации модели
+Визуализация моделей при помощи forest-plot
+
+
+```{r}
+
+
+ggcoef_model(fit10_1, exponentiate = TRUE, 
+             intercept = TRUE,
+             variable_labels = c(
+               age = "Age",
+               under_18 = "Have children",
+               spouse_or_partner = "Live with spouse or partner",
+               smoking = "Smoke now",
+               income_level = "Income level"
+             )
+              )
+ ggsave("forest_plot_fit10_1.jpeg")
+```
 
 
 ```{r}
