@@ -31,9 +31,9 @@ pictures               --  graphical data providing visualisation for analysis
 ```
 ## Roles
 + An assessment of [`The association of Helicobacter Pylori infection with lifestyle`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/H_Pylori.Rmd) made by [*Anastasia Kozyreva*](https://github.com/AnastasiaKozyreva).
++ `Search for association of IgG (H.pylori) with lipid profile` was made by *Julia Isakova*.
 + An assessment of [`The association of lipidogram with lifestyle`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Mark_lipidom_upd.Rmd) made by [*Mark Kachanovskiy*](https://github.com/avemarkus).
 + An assessment of [`General IgE: relationships with pets kept at home`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/IgE.Rmd) made by [*Kirill Usoltsev*](https://github.com/UsoltsevKirill).
-+ `Search for association of IgG (H.pylori) with lipid profile` was made by *Julia Isakova*.
 + [`Machine learning modeling in assessment of immunity against Covid-19 by serological testing `](https://github.com/AnastasiaKozyreva/bioinf_project/tree/main/code/prediction_MNA_by_IgG) made by [*Anastasiia Pulkina*](https://github.com/AnastasiiaPulkina) and [*Pavel Kulanin*](https://github.com/PavelKu78).
 + An assessment of [`Excessive use of masks as anxiety indicator`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Masks.Rmd) made by [*Fedor Logvin*](https://github.com/nshnt4evr).
 
