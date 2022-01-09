@@ -34,6 +34,6 @@ pictures               --  graphical data providing visualisation for analysis
 + `Search for association of IgG (H.pylori) with lipid profile` was made by *Julia Isakova*.
 + An assessment of [`The association of lipidogram with lifestyle`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Mark_lipidom_upd.Rmd) made by [*Mark Kachanovskiy*](https://github.com/avemarkus).
 + An assessment of [`General IgE: relationships with pets kept at home`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/IgE.Rmd) made by [*Kirill Usoltsev*](https://github.com/UsoltsevKirill).
-+ [`Application of machine learning to predict the presence of neutralizing antibodies against SARS-CoV-2 based on SARS-CoV-2 IgG assays`](https://github.com/AnastasiaKozyreva/bioinf_project/tree/main/code/prediction_MNA_by_IgG) made by [*Anastasiia Pulkina*](https://github.com/AnastasiiaPulkina) and [*Pavel Kulanin*](https://github.com/PavelKu78).
++ [`Application of machine learning to predict the presence of neutralizing antibodies against SARS-CoV-2 based on SARS-CoV-2 IgG assays`](https://github.com/AnastasiaKozyreva/bioinf_project/tree/main/code/NAB_Elisa) made by [*Anastasiia Pulkina*](https://github.com/AnastasiiaPulkina) and [*Pavel Kulanin*](https://github.com/PavelKu78).
 + An assessment of [`Excessive use of masks as anxiety indicator`](https://github.com/AnastasiaKozyreva/bioinf_project/blob/main/code/Masks.Rmd) made by [*Fedor Logvin*](https://github.com/nshnt4evr).
 
