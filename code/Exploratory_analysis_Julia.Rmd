@@ -1,0 +1,694 @@
+---
+title: "SeroQuestEuroUni2020"
+author: "JAleksIsakova"
+date: "11/2/2021"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+Установка библиотек
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,     # отображение кода в итоговом документе
+                      message = TRUE,  # отображение сообщений в итоговом документе
+                      error = FALSE,    # отображение ошибок в итоговом документе
+                      warning = FALSE,  # отображение предупреждений в итоговом документе
+                      cache = FALSE,    # надо ли сохранять код в чанках до их изменений
+                      fig.height = 10, # высота рисунка в дюймах
+                      fig.width = 10)  # широта рисунка в дюймах
+
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(readxl)
+library(data.table)
+library(lubridate)
+library(stringi)
+library(stringr)
+library(broom)
+
+library(yardstick)
+library(patchwork)
+
+library(GGally)
+library(sjPlot)
+
+library(broom.helpers)
+library(webshot)
+
+```
+
+Загрузка данных
+
+```{r}
+
+load("~/Documents/Bioinformatics/SeroquestEuroUni2020/phone_survey_data.rdata")
+
+load("~/Documents/Bioinformatics/SeroquestEuroUni2020/other_test_results_matched_to_phone_survey_ids.rdata")
+
+```
+
+## Dataset 1
+
+```{r}
+
+phone <- phone_survey_data 
+glimpse(phone)
+
+```
+
+## Clean Dataset 1
+
+```{r}
+
+phone_clean <- phone %>%
+  dplyr::select(!c(interviewer, interview_duration, used_transport, selftested_covid, selftested_covid_positive, street_used_mask, washing_hands_more, health_level, smoking, smoked_previously, smoking_start_age, smoking_giveup_age, cigarettes_per_day, ct_scan, mri, ultrasonography, fluorography, mammography, x_ray, visit_doctor, no_pets, dogs, cats, rodents, birds, other_pets, not_sure_pets, cough_now, fever_now, sorethroat_now, anosmia_now, runnynose_now, nosymptoms_now, error_in_randomization, interview_date, lenta_card, agreed))
+
+```
+
+## Dataset 2
+
+```{r}
+
+other_test <- other_test_results_matched_to_phone_survey_ids 
+# %>%
+# glimpse()
+
+```
+
+## Clean Dataset 2
+
+```{r}
+
+other_test_clean <- other_test %>%
+  dplyr::select(!c(Hemoglobin_A0, draw_sample_date))
+
+```
+
+Объединяем данные
+
+## Merged Datasets
+# merged_data - HP num with NAs (nobs = 1510)
+# data_omit - HP num without NAs (nobs = 1417)
+# df_fac - HP & lip fac
+# df_hp - HP fac
+
+```{r}
+
+merged_data <- merge(x = phone_clean, y = other_test_clean, # Data frames or objects to be coerced
+      by = c("ID"), # Columns used for merging
+      all = FALSE, # If TRUE, all.x = TRUE and all.y = TRUE
+      sort = TRUE, # Whether to sort the output by the 'by' columns
+      suffixes = c(".x",".y"), # Suffixes for creating unique column names
+      no.dups = TRUE, # Whether to avoid duplicated column names appending more suffixes or not
+      incomparables = NULL) %>% # How to deal with values that can not be matched
+  mutate(male = as.factor(male))
+summary(merged_data)
+data_omit <- merged_data[!is.na(merged_data$IgG_hpylori)]
+summary(data_omit)
+
+```
+
+Если выбрасывать все NAs - остается совсем мало наблюдений
+-> Чистим данные непосредственно при применении требующих отсутствие NA функций
+
+## Format change
+# IgG factor 30
+
+ Пытаемся определить верный референс 
+ 
+```{r}
+
+data_omit %>%
+  mutate(IgG_hpylori = ifelse(IgG_hpylori > 30, "infected", "normal") %>% as.factor()) %>%
+  count(IgG_hpylori) %>%
+  group_by(IgG_hpylori) %>%
+  ungroup() %>%
+  mutate(percent = (n / sum(n)) %>% round(4) %>% `*`(100) %>% paste0(., "%"))
+
+```
+Приблизительно соответствует лит данным (15 тоже), но судя по диапазону значений, лучше выбрать порог повыше. Останавливаемся на 30.
+
+# IgG factor 15
+
+```{r}
+
+data_omit %>%
+ mutate(IgG_hpylori = ifelse(IgG_hpylori >  15, "infected", "normal") %>% as.factor()) %>%
+  count(IgG_hpylori) %>%
+  group_by(IgG_hpylori) %>%
+  ungroup() %>%
+  mutate(percent = (n / sum(n)) %>% round(4) %>% `*`(100) %>% paste0(., "%"))
+
+```
+
+# IgG factor 0.9
+
+```{r}
+
+data_omit %>%
+ mutate(IgG_hpylori = ifelse(IgG_hpylori >  0.9, "infected", "normal") %>% as.factor()) %>%
+  count(IgG_hpylori) %>%
+  group_by(IgG_hpylori) %>%
+  ungroup() %>%
+ mutate(percent = (n / sum(n)) %>% round(4) %>% `*`(100) %>% paste0(., "%"))
+
+```
+
+## factors
+# IgG choose (30) factor 
+# lipids factor 
+# для триглицеридов 1,7 ммоль/л, для холестерина 6,18 ммоль/л, для коэффициента атерогенности 3.5
+# для ЛПВП: мужчины > 1,0 ммоль/л; женщины: > 1,2 ммоль/л, для ЛПНП 3,0 ммоль/л, для ЛПОНП 0,8 ммоль/л)
+
+```{r}
+
+df_fac <- data_omit %>%
+  mutate(IgG_hpylori = ifelse(IgG_hpylori > 30, "infected", "normal") %>% as.factor()) %>%
+  mutate(Cholesterin = ifelse(Cholesterin > 6.18, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(Triglycerides = ifelse(Triglycerides > 1.7, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(Atherogenic_index = ifelse(Atherogenic_index > 3.5, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(VLDL = ifelse(VLDL > 0.8, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(LDL = ifelse(LDL > 3.0, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(HDL = ifelse(HDL < 1.0 & male == 1 | HDL < 1.2 & male == 0, "abnormal", "normal") %>% as.factor()) %>%
+  mutate(male = as.factor(male)) %>%
+  mutate(travelled = as.factor(travelled)) %>%
+  mutate(drinks_coffee = as.factor(drinks_coffee)) %>%
+  mutate(cough_past = as.factor(cough_past)) %>%
+  mutate(fever_past = as.factor(fever_past)) %>%
+  mutate(sorethroat_past = as.factor(sorethroat_past)) %>%
+  mutate(anosmia_past = as.factor(anosmia_past)) %>%
+  mutate(runnynose_past = as.factor(runnynose_past)) %>%
+  mutate(fatigue_past = as.factor(fatigue_past)) %>%
+  mutate(nosymptoms_past = as.factor(nosymptoms_past)) %>%
+  mutate(self_medical_checkups = as.factor(self_medical_checkups)) %>%
+  mutate(no_checkups = as.factor(no_checkups)) %>%
+  mutate(allergies = as.factor(allergies)) %>%
+  mutate(chronical_diseases = as.factor(chronical_diseases)) %>%
+  mutate(wears_glasses = as.factor(wears_glasses)) %>%
+  mutate(lives_alone = as.factor(lives_alone)) %>%
+  mutate(over_65 = as.factor(over_65)) %>%
+  mutate(spouse_or_partner = as.factor(spouse_or_partner)) %>%
+  mutate(other_people = as.factor(other_people)) %>%
+  mutate(work_status = as.factor(work_status)) %>%
+  mutate(study_status = as.factor(study_status)) %>%
+  mutate(received_pension_or_other_support = as.factor(received_pension_or_other_support)) %>%
+  mutate(job_search = as.factor(job_search)) %>%
+  mutate(manages_people = as.factor(manages_people)) %>%
+  mutate(physical_labour = as.factor(physical_labour)) %>%
+  mutate(work_with_people = as.factor(work_with_people)) %>%
+  mutate(education_level = as.factor(education_level)) %>%
+  mutate(fatigue_now = as.factor(fatigue_now))
+summary(df_fac)
+
+```
+
+# only IgG as factor
+
+```{r}
+
+df_hp <- data_omit %>%
+  mutate(IgG_hpylori = ifelse(IgG_hpylori > 30, "infected", "normal") %>% as.factor())
+
+```
+
+## visualization
+# Numeric
+
+# Lipids
+
+```{r}
+
+df_hp %>%
+filter(!is.na(Cholesterin)) %>%
+ ggplot(aes(x = Cholesterin)) +
+  geom_density() +
+     theme_classic()
+
+```
+
+```{r}
+
+df_hp %>%
+filter(!is.na(Triglycerides)) %>%
+ggplot(aes(x = Triglycerides)) +
+    geom_density() +
+    theme_classic()
+
+```
+
+```{r}
+
+df_hp %>%
+filter(!is.na(Atherogenic_index)) %>%
+ggplot(aes(x = Atherogenic_index)) +
+    geom_density() +
+    theme_classic()
+
+```
+
+```{r}
+
+df_hp %>%
+filter(!is.na(VLDL)) %>%
+ggplot(aes(x = VLDL)) +
+    geom_density() +
+    theme_classic()
+
+```
+
+```{r}
+
+df_hp %>%
+filter(!is.na(LDL)) %>%
+ggplot(aes(x = LDL)) +
+    geom_density() +
+    theme_classic()
+
+```
+
+```{r}
+
+df_hp %>%
+filter(!is.na(HDL)) %>%
+ggplot(aes(x = HDL)) +
+    geom_density() +
+    theme_classic()
+
+```
+
+## Correlation (Visual evaluation)
+
+# fac var
+
+# Social & Demographic factors
+
+```{r}
+
+df_fac %>%
+filter(!is.na(drinks_coffee)) %>%
+ggplot(aes(x = drinks_coffee,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(job_search)) %>%
+ggplot(aes(x = job_search,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(work_with_people)) %>%
+ggplot(aes(x = work_with_people,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(male)) %>%
+ggplot(aes(x = male,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(chronical_diseases)) %>%
+ggplot(aes(x = chronical_diseases,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(work_status)) %>%
+ggplot(aes(x = work_status,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(study_status)) %>%
+ggplot(aes(x = study_status,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(income_level)) %>%
+ggplot(aes(x = chronical_diseases,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+```
+# Lipids
+
+```{r}
+
+df_fac %>%
+filter(!is.na(Triglycerides)) %>%
+  ggplot(aes(x = Triglycerides,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(Atherogenic_index)) %>%
+ggplot(aes(x = Atherogenic_index,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(Cholesterin)) %>%
+ggplot(aes(x = Cholesterin,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(VLDL)) %>%
+  ggplot(aes(x = VLDL,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(HDL)) %>%
+  ggplot(aes(x = HDL,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(LDL)) %>%
+  ggplot(aes(x = LDL,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+```
+
+# num var
+
+# Lipids
+
+```{r}
+
+df_hp %>%
+ggplot(aes(x = Triglycerides,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(LDL)) %>%
+  ggplot(aes(x = LDL,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_fac %>%
+filter(!is.na(LDL)) %>%
+  ggplot(aes(x = LDL,
+               fill = IgG_hpylori)) +
+    geom_bar() +
+    theme_classic()
+
+df_hp %>%
+ggplot(aes(x = Atherogenic_index,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_hp %>%
+ggplot(aes(x = Cholesterin,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_hp %>%
+ggplot(aes(x = VLDL,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_hp %>%
+ggplot(aes(x = HDL,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_hp %>%
+ggplot(aes(x = LDL,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+df_lip %>%
+ggplot(aes(x = num_people_home,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic() 
+
+df_lip %>%
+ggplot(aes(x = IgE_general_quantitative,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    scale_x_log10() +
+    theme_classic() 
+
+df_hp %>%
+ggplot(aes(x = Triglycerides,
+               fill = IgG_hpylori)) +
+    geom_boxplot() +
+    theme_classic()
+
+```
+
+## Comparation in groups divided by various criteria (hP ~ lipids, vit D, glasses, male, age, BMI, coffee, smoking, etc.)
+## Референс для ЛПВП: мужчины > 1,0 ммоль/л; женщины: > 1,2 ммоль/л.
+
+# Hp ~ lipids (lip num)
+
+```{r}
+
+wilcox.test(LDL ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+wilcox.test(HDL ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+wilcox.test(VLDL ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+wilcox.test(Triglycerides ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+wilcox.test(Cholesterin ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+wilcox.test(Atherogenic_index ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+```
+
+# Hp ~ lipids (lip fac)
+
+#LDL
+
+```{r}
+
+df_LDL <- data.frame(df_fac$IgG_hpylori, df_fac$LDL)
+
+matrix <- matrix(c(481, 166, 491, 279), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+#VLDL
+
+```{r}
+
+df_VLDL <- data.frame(df_fac$IgG_hpylori, df_fac$VLDL)
+
+matrix <- matrix(c(78, 569, 76, 694), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# Triglycerides
+
+```{r}
+
+df_TG <- data.frame(df_fac$IgG_hpylori, df_fac$Triglycerides)
+
+matrix <- matrix(c(190, 457, 196, 574), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# Cholesterin
+
+```{r}
+
+df_Choles <- data.frame(df_fac$IgG_hpylori, df_fac$Cholesterin)
+
+matrix <- matrix(c(196, 451, 148, 622), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# HDL
+
+```{r}
+
+df_HDL <- data.frame(df_fac$IgG_hpylori, df_fac$HDL)
+
+matrix <- matrix(c(55, 592, 64, 706), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# Athero_index
+
+```{r}
+
+df_AI <- data.frame(df_fac$IgG_hpylori, df_fac$Atherogenic_index)
+
+matrix <- matrix(c(182, 465, 164, 606), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# Hp ~ male
+
+```{r}
+
+df_male <- data.frame(df_fac$IgG_hpylori, df_fac$male)
+
+matrix <- matrix(c(407, 240, 515, 255), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+# Hp ~ age (num)
+
+```{r}
+
+wilcox.test(age ~ as.factor(IgG_hpylori), df_hp) %>%
+  broom::tidy()
+
+```
+
+# Hp ~ age (fac)
+
+```{r}
+ 
+  df_hp$age_grouped <- cut(df_hp$age, breaks = c(17, 44, 95), labels = c("18-44", "+45"))
+df_age <- data.frame(df_hp$IgG_hpylori, df_hp$age_grouped)
+  
+matrix <- matrix(c(363, 284, 551, 219), nrow = 2, byrow = TRUE)
+chisq.test(matrix)
+
+```
+
+## Regression (lipids, chronic_diseases, etc)
+
+# General linear model (Обобщенная линейная модель)
+
+# Как Hp влияет на липиды
+# HDL
+
+```{r}
+
+g_hp_H <- glm(HDL ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_H$coefficients)
+
+broom::tidy(g_hp_H, exponentiate = T)
+
+ggcoef_model(g_hp_H, exponentiate = TRUE, intercept = TRUE)
+
+```
+
+# LDL
+```{r}
+
+g_hp_L <- glm(LDL ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_L$coefficients)
+
+broom::tidy(g_hp_L, exponentiate = T)
+
+ggcoef_model(g_hp_L, exponentiate = TRUE, intercept = TRUE)
+
+```
+# VLDL
+
+```{r}
+
+g_hp_V <- glm(VLDL ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_V$coefficients)
+
+broom::tidy(g_hp_V, exponentiate = T)
+
+ggcoef_model(g_hp_V, exponentiate = TRUE, intercept = TRUE)
+
+```
+
+# Triglycerides
+
+```{r}
+
+g_hp_T <- glm(Triglycerides ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_T$coefficients)
+
+broom::tidy(g_hp_T, exponentiate = T)
+
+ggcoef_model(g_hp_T, exponentiate = TRUE, intercept = TRUE)
+
+```
+
+# Cholesterin
+
+```{r}
+
+g_hp_C <- glm(Cholesterin ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_C$coefficients)
+
+broom::tidy(g_hp_C, exponentiate = T)
+
+ggcoef_model(g_hp_C, exponentiate = TRUE, intercept = TRUE)
+
+```
+
+# Athero_index
+
+```{r}
+
+g_hp_A <- glm(Atherogenic_index ~ IgG_hpylori + age + male + drinks_coffee + work_status + study_status + education_level + income_level + chronical_diseases, data = df_fac, family = "binomial")
+
+exp(g_hp_A$coefficients)
+
+broom::tidy(g_hp_A, exponentiate = T)
+
+ggcoef_model(g_hp_A, exponentiate = TRUE, intercept = TRUE)
+
+```
+
+## Summary model table
+
+```{r}
+
+  tab_model(g_hp_A, g_hp_C, g_hp_H, g_hp_L, g_hp_T, g_hp_V, show.se = TRUE, show.stat = TRUE)
+
+```
+
+
